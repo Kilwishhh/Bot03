@@ -39,6 +39,17 @@ Global rules (PRD sections 73, 84):
   Alembic migrates a fresh database.
 - **Risks:** Environment/version mismatch for asyncpg/psycopg; resolved via Docker pinning.
 
+### Phase 1 status (complete)
+
+Verified locally on Debian 12 (Python 3.11, PostgreSQL 15, Redis 7):
+
+- `alembic upgrade head` applied `23554ec295d4` (users, organizations, memberships) cleanly to a fresh DB.
+- `GET /health` → `{"status":"ok","checks":{"api":"ok","database":"ok","redis":"ok",
+  "exchange":"not_configured","workers":"not_configured"}}`.
+- `pytest`: 6 passed (config defaults, prod-secret guard, metadata tables, health, fresh-DB migration).
+- `ruff check apps packages tests` and `mypy apps packages tests`: clean.
+- Docker Compose + `api.Dockerfile` written (Compose YAML validated; image build not runnable in sandbox).
+
 ## Phase 2 — Authentication
 
 - **Objective:** Register, login, logout, refresh token, password hashing (Argon2), email-verification
