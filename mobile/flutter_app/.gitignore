@@ -1,0 +1,17 @@
+# Flutter
+**/build/
+**/android/**/local.properties
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+.pub-cache/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Files produced by pub
+.packages
+.pub
+
+# VS Code
+.vscode/
+.idea/

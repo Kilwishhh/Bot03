@@ -1,0 +1,25 @@
+name: mk_trader_mobile
+description: "Mobile client for MK TRADER backend"
+publish_to: 'none'
+version: 0.0.1
+
+environment:
+  sdk: ">=2.19.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^0.13.6
+  cupertino_icons: ^1.0.2
+  web_socket_channel: ^2.2.0
+  shared_preferences: ^2.1.1
+  intl: ^0.18.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/

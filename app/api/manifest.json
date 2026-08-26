@@ -1,0 +1,9 @@
+{
+  "name": "Crypto Trading Bot",
+  "short_name": "Crypto Bot",
+  "start_url": "/mobile",
+  "display": "standalone",
+  "background_color": "#101418",
+  "theme_color": "#19212a",
+  "icons": []
+}

@@ -1,0 +1,44 @@
+services:
+  api:
+    build: .
+    env_file:
+      - .env
+    environment:
+      TRADING_MODE: paper
+    command: python -m uvicorn app.api.server:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - trading_data:/app/data
+
+  bot:
+    build: .
+    env_file:
+      - .env
+    environment:
+      TRADING_MODE: paper
+    command: python -m app.worker
+    depends_on:
+      - api
+    volumes:
+      - trading_data:/app/data
+
+  dashboard:
+    build: .
+    env_file:
+      - .env
+    environment:
+      TRADING_MODE: paper
+    command: python -m streamlit run app/dashboard/streamlit_app.py --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    profiles:
+      - dashboard
+
+volumes:
+  trading_data:
