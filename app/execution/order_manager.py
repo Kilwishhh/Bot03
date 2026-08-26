@@ -5,6 +5,7 @@ from app.exchange.base import ExchangeAdapter
 from app.exchange.models import OrderRequest, OrderSide, OrderType
 from app.risk import PositionSizer, RiskManager, StopLossCalculator
 from app.signals.models import Signal, SignalSide
+from .dex_gate import DexOrderGate
 from .position_manager import PositionManager
 from .reconciliation import Reconciler
 
@@ -18,6 +19,7 @@ class OrderManager:
         self._sizer = sizer
         self._positions = PositionManager(exchange)
         self._reconciler = reconciler
+        self._dex_gate = DexOrderGate(exchange)
 
     def process_signal(self, signal: Signal, daily_pnl: Decimal = Decimal("0"), open_positions: int = 0, leverage: int = 1):
         if signal.side is SignalSide.HOLD:
@@ -35,7 +37,12 @@ class OrderManager:
         if quantity <= 0:
             return None
         side = OrderSide.BUY if signal.side is SignalSide.BUY else OrderSide.SELL
-        return self._positions.submit(OrderRequest(signal.symbol, side, OrderType.MARKET, quantity))
+        request = OrderRequest(signal.symbol, side, OrderType.MARKET, quantity)
+        if self._dex_gate.supports_preview():
+            # DEX providers require an explicit wallet-approval step; the
+            # signal flow prepares the request but does NOT auto-approve it.
+            return self._dex_gate.submit(request)
+        return self._positions.submit(request)
 
     def balance(self):
         return self._exchange.get_balance()

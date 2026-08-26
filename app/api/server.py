@@ -3,10 +3,13 @@
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from app.config import Settings
+from app.config import ExchangeProvider, Settings
 from app.database import TradingRepository
 from app.api.auth import require_admin_token
+from app.exchange.models import OrderRequest, OrderSide, OrderType
+from app.execution.dex_gate import DexOrderGate
 import asyncio
 import json
 
@@ -255,4 +258,117 @@ def admin_data(_: None = Depends(require_admin_token)) -> dict[str, object]:
             "chain_configured": settings.dex_chain_id is not None and bool(settings.dex_rpc_url),
             "execution_requires_approval": True,
         },
+    }
+
+
+def _build_dex_exchange(settings: Settings):
+    """Construct the configured DEX adapter for admin preview/approval actions.
+
+    Only valid when an exchange provider that supports preview/approval is
+    selected. For Binance/paper adapters the endpoints reject with a 400.
+    """
+    if settings.exchange_provider not in (
+        ExchangeProvider.HYPERLIQUID,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="selected exchange provider does not support DEX preview/approval",
+        )
+    from app.exchange import create_exchange
+    return create_exchange(settings)
+
+
+def _build_dex_request(payload: dict) -> OrderRequest:
+    """Build an OrderRequest from a JSON payload, validating numeric fields."""
+    try:
+        quantity = Decimal(str(payload["quantity"]))
+    except (KeyError, InvalidOperation):
+        raise HTTPException(status_code=400, detail="quantity is required and must be a number")
+    if quantity <= 0:
+        raise HTTPException(status_code=400, detail="quantity must be positive")
+    price_raw = payload.get("price")
+    price = None
+    if price_raw is not None and price_raw != "":
+        try:
+            price = Decimal(str(price_raw))
+        except InvalidOperation:
+            raise HTTPException(status_code=400, detail="price must be a number")
+        if price <= 0:
+            raise HTTPException(status_code=400, detail="price must be positive")
+    return OrderRequest(
+        symbol=str(payload["symbol"]),
+        side=OrderSide(str(payload["side"]).upper()),
+        order_type=OrderType(str(payload.get("order_type", "MARKET")).upper()),
+        quantity=quantity,
+        price=price,
+        client_order_id=payload.get("client_order_id"),
+    )
+
+
+@app.post("/admin/dex/preview")
+def admin_dex_preview(payload: dict, _: None = Depends(require_admin_token)) -> dict[str, object]:
+    """Preview a DEX order without placing it. Requires admin token."""
+    settings = Settings()
+    exchange = _build_dex_exchange(settings)
+    request = _build_dex_request(payload)
+    gate = DexOrderGate(exchange)
+    if not gate.supports_preview():
+        raise HTTPException(status_code=400, detail="adapter does not support preview/approval")
+    preview = exchange.preview_order(request)
+    return {
+        "symbol": preview.symbol,
+        "side": preview.side,
+        "order_type": preview.order_type,
+        "quantity": str(preview.quantity),
+        "price": str(preview.price) if preview.price is not None else None,
+        "requires_approval": preview.requires_approval,
+        "status": preview.status,
+        "wallet_address": preview.wallet_address,
+        "client_order_id": preview.client_order_id,
+    }
+
+
+@app.post("/admin/dex/approve")
+def admin_dex_approve(payload: dict, _: None = Depends(require_admin_token)) -> dict[str, object]:
+    """Record the wallet owner's approval of a previously-returned preview.
+
+    The caller (typically the admin UI backed by a WalletConnect session) is
+    responsible for having received real wallet-owner consent before invoking
+    this endpoint.
+    """
+    settings = Settings()
+    exchange = _build_dex_exchange(settings)
+    request = _build_dex_request(payload)
+    gate = DexOrderGate(exchange)
+    if not gate.supports_preview():
+        raise HTTPException(status_code=400, detail="adapter does not support preview/approval")
+    preview = exchange.preview_order(request)
+    exchange.approve_order(preview)
+    return {
+        "approved": True,
+        "client_order_id": preview.client_order_id,
+        "wallet_address": preview.wallet_address,
+    }
+
+
+@app.post("/admin/dex/place")
+def admin_dex_place(payload: dict, _: None = Depends(require_admin_token)) -> dict[str, object]:
+    """Preview, mark approved, then place a DEX order. Admin-only.
+
+    Use this when the wallet owner has already approved via WalletConnect and
+    the admin wants to execute the now-approved order through the framework.
+    """
+    settings = Settings()
+    exchange = _build_dex_exchange(settings)
+    request = _build_dex_request(payload)
+    gate = DexOrderGate(exchange)
+    if not gate.supports_preview():
+        raise HTTPException(status_code=400, detail="adapter does not support preview/approval")
+    result = gate.approve_and_place(request)
+    return {
+        "order_id": result.order_id,
+        "symbol": result.symbol,
+        "status": result.status,
+        "executed_quantity": str(result.executed_quantity),
+        "average_price": str(result.average_price) if result.average_price is not None else None,
     }
