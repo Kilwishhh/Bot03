@@ -1,6 +1,7 @@
 """Scan Binance Futures public market data without placing orders."""
 
 import argparse
+
 from app.config import Settings
 from app.exchange.binance_futures import BinanceFuturesAdapter
 from app.market_data import AdapterMarketDataProvider, FuturesSignalScanner

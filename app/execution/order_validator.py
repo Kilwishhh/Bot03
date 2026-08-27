@@ -1,6 +1,7 @@
 """Validation rules applied before an order reaches an exchange."""
 
 from decimal import Decimal
+
 from app.exchange.models import OrderRequest, OrderType
 
 

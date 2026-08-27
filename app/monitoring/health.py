@@ -1,9 +1,10 @@
 """Simple operational health summary."""
 
 from dataclasses import dataclass
+
 from app.exchange.base import ExchangeAdapter
-from app.market_data import MarketDataHealth
 from app.exchange.models import Candle
+from app.market_data import MarketDataHealth
 
 
 @dataclass(frozen=True)

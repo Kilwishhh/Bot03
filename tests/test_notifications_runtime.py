@@ -1,7 +1,6 @@
-from datetime import datetime, timezone
 from decimal import Decimal
+
 from app.database import TradingRepository
-from app.exchange.models import Candle
 from app.exchange.paper import PaperTradingAdapter
 from app.execution import OrderManager
 from app.market_data import AdapterMarketDataProvider

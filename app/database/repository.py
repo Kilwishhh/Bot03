@@ -1,10 +1,10 @@
 """Small SQLite repository for Phase 1/2 operational records."""
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from app.exchange.models import OrderResult
-from app.exchange.models import Balance, Position
+
+from app.exchange.models import Balance, OrderResult, Position
 from app.signals.models import Signal
 
 
@@ -32,7 +32,7 @@ class TradingRepository:
     def save_order(self, order: OrderResult) -> None:
         self._connection.execute(
             "INSERT OR REPLACE INTO orders VALUES (?, ?, ?, ?, ?, ?)",
-            (order.order_id, order.symbol, order.status, str(order.executed_quantity), str(order.average_price) if order.average_price is not None else None, datetime.now(timezone.utc).isoformat()),
+            (order.order_id, order.symbol, order.status, str(order.executed_quantity), str(order.average_price) if order.average_price is not None else None, datetime.now(UTC).isoformat()),
         )
         self._connection.commit()
 
@@ -44,21 +44,21 @@ class TradingRepository:
     def record_event(self, event_type: str, message: str) -> None:
         self._connection.execute(
             "INSERT INTO bot_events (event_type, message, created_at) VALUES (?, ?, ?)",
-            (event_type, message, datetime.now(timezone.utc).isoformat()),
+            (event_type, message, datetime.now(UTC).isoformat()),
         )
         self._connection.commit()
 
     def record_error(self, error_type: str, message: str) -> None:
         self._connection.execute(
             "INSERT INTO errors (error_type, message, created_at) VALUES (?, ?, ?)",
-            (error_type, message, datetime.now(timezone.utc).isoformat()),
+            (error_type, message, datetime.now(UTC).isoformat()),
         )
         self._connection.commit()
 
     def save_balance(self, balance: Balance) -> None:
         self._connection.execute(
             "INSERT OR REPLACE INTO balances VALUES (?, ?, ?, ?)",
-            (balance.asset, str(balance.wallet_balance), str(balance.available_balance), datetime.now(timezone.utc).isoformat()),
+            (balance.asset, str(balance.wallet_balance), str(balance.available_balance), datetime.now(UTC).isoformat()),
         )
         self._connection.commit()
 
@@ -67,7 +67,7 @@ class TradingRepository:
             return
         self._connection.execute(
             "INSERT OR REPLACE INTO positions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (position.symbol, position.side.value, str(position.quantity), str(position.entry_price), str(position.mark_price), position.leverage, str(position.unrealized_pnl), datetime.now(timezone.utc).isoformat()),
+            (position.symbol, position.side.value, str(position.quantity), str(position.entry_price), str(position.mark_price), position.leverage, str(position.unrealized_pnl), datetime.now(UTC).isoformat()),
         )
         self._connection.commit()
 
@@ -102,7 +102,7 @@ class TradingRepository:
         ).fetchall()
 
     def set_control_state(self, desired_state: str, heartbeat_at: str | None = None) -> None:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self._connection.execute(
             "INSERT INTO control_state (id, desired_state, heartbeat_at, updated_at) VALUES (1, ?, ?, ?) "
             "ON CONFLICT(id) DO UPDATE SET desired_state = ?, heartbeat_at = ?, updated_at = ?",
@@ -114,7 +114,7 @@ class TradingRepository:
         return self._connection.execute("SELECT desired_state, heartbeat_at, updated_at FROM control_state WHERE id = 1").fetchone()
 
     def prune_operational_records(self, retention_days: int) -> dict[str, int]:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat()
         deleted = {}
         for table, column in (("signals", "timestamp"), ("bot_events", "created_at"), ("errors", "created_at")):
             cursor = self._connection.execute(f"DELETE FROM {table} WHERE {column} < ?", (cutoff,))

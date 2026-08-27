@@ -1,6 +1,7 @@
 import pytest
+
 from app.dex.walletconnect import WalletConnectAdapter
-from app.exchange.walletconnect import WalletConnectSession, WalletConnection
+from app.exchange.walletconnect import WalletConnection, WalletConnectSession
 
 
 def test_walletconnect_never_approves_without_connection():

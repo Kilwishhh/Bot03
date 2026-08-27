@@ -1,12 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
 class WalletConnectAdapter:
     project_id: str
-    chain_id: Optional[int] = None
-    rpc_url: Optional[str] = None
+    chain_id: int | None = None
+    rpc_url: str | None = None
 
     def prepare_session(self) -> str:
         """Return a WalletConnect session URI that can be rendered as a QR code.

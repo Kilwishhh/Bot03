@@ -1,4 +1,5 @@
 from decimal import Decimal
+
 from app.exchange.models import OrderSide, Position
 from app.portfolio import PnlCalculator
 

@@ -1,6 +1,7 @@
 """Strategy contract with no exchange dependency."""
 
 from abc import ABC, abstractmethod
+
 from app.exchange.models import Candle
 from app.signals.models import Signal
 

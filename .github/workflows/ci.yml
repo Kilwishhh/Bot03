@@ -2,33 +2,101 @@ name: CI
 
 on:
   push:
+    branches: [main, master]
   pull_request:
+  workflow_dispatch:
+
+# Single source of truth for CI. Runs on every push and PR.
+# Phases: (1) lint, (2) unit tests on Python 3.11 + 3.13, (3) offline
+# smoke, (4) Docker build + container smoke, (5) Compose validation.
 
 jobs:
-  python:
+  lint:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint
+        # E/F = pycodestyle/pyflakes, I = isort, B = bugbear, UP = pyupgrade.
+        run: ruff check app tests scripts
+
+  test:
+    name: pytest (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: lint
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.11', '3.13']
+        python-version: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install --upgrade pip
-      - run: pip install -e ".[test,api]"
-      - run: pytest -q
-      - run: python scripts/check_app.py
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: pip install -e ".[test,api]"
+      - name: Pytest
+        run: pytest -q --tb=short
+      - name: Offline smoke
+        run: python scripts/check_app.py
+      - name: Release check
+        run: python scripts/release_check.py
 
   docker:
+    name: Docker build + smoke
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t mk-trader-ci .
-      - run: docker run -d --name mk-trader-api -p 8000:8000 -e TRADING_MODE=paper mk-trader-ci
-      - run: python -m pip install httpx2
-      - run: python scripts/docker_smoke.py
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        run: docker build -t mktrader:ci -f Dockerfile .
+      - name: Start container (paper mode, no creds)
+        run: |
+          docker run -d --name mktrader-ci -p 8000:8000 \
+            -e TRADING_MODE=paper \
+            -e DATABASE_PATH=/app/data/trading.db \
+            mktrader:ci
+      - name: Wait for /health
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8000/health; then
+              echo "up after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+      - name: Container smoke
+        run: python scripts/docker_smoke.py
       - if: always()
-        run: docker logs mk-trader-api || true
+        run: docker logs mktrader-ci || true
       - if: always()
-        run: docker rm -f mk-trader-api || true
+        run: docker rm -f mktrader-ci || true
+
+  compose:
+    name: Docker Compose validate
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose config
+        run: docker compose config -q
+      - name: Compose up + smoke
+        run: |
+          docker compose up -d
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8000/health; then
+              echo "up after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          python scripts/docker_smoke.py
+      - if: always()
+        run: docker compose down --remove-orphans || true

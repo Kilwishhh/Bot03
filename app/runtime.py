@@ -3,12 +3,12 @@
 import logging
 import time
 from decimal import Decimal
+
 from app.database import TradingRepository
 from app.execution import OrderManager
 from app.market_data import MarketDataProvider
-from app.signals import SignalEngine
 from app.notifications import SignalPublisher
-
+from app.signals import SignalEngine
 
 logger = logging.getLogger(__name__)
 

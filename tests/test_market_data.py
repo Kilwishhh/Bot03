@@ -1,4 +1,5 @@
 from decimal import Decimal
+
 from app.exchange.paper import PaperTradingAdapter
 from app.market_data import AdapterMarketDataProvider
 

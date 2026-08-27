@@ -1,10 +1,12 @@
 """Coordinate signal admission and validated order submission."""
 
 from decimal import Decimal
+
 from app.exchange.base import ExchangeAdapter
 from app.exchange.models import OrderRequest, OrderSide, OrderType
 from app.risk import PositionSizer, RiskManager, StopLossCalculator
 from app.signals.models import Signal, SignalSide
+
 from .dex_gate import DexOrderGate
 from .position_manager import PositionManager
 from .reconciliation import Reconciler

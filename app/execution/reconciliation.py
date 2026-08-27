@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from decimal import Decimal
+
 from app.exchange.base import ExchangeAdapter
 from app.exchange.models import Position
 

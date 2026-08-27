@@ -1,12 +1,13 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+
 from app.exchange.models import Candle
 from app.signals import SignalSide
 from app.strategy import IndicatorStrategy
 
 
 def candles(values: list[int]) -> list[Candle]:
-    start = datetime.now(timezone.utc)
+    start = datetime.now(UTC)
     return [Candle(start + timedelta(minutes=index), Decimal(value), Decimal(value), Decimal(value), Decimal(value), Decimal("1"), start + timedelta(minutes=index + 1)) for index, value in enumerate(values)]
 
 

@@ -1,9 +1,10 @@
 """Create the selected adapter while preserving trading safety gates."""
 
+from app.config import ExchangeProvider, Settings, TradingMode
+
 from .base import ExchangeAdapter
 from .binance_futures import BinanceFuturesAdapter
 from .paper import PaperTradingAdapter
-from app.config import ExchangeProvider, Settings, TradingMode
 
 
 def create_exchange(settings: Settings) -> ExchangeAdapter:

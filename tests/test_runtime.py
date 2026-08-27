@@ -1,5 +1,6 @@
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from datetime import datetime, timedelta, timezone
+
 from app.database import TradingRepository
 from app.exchange.models import Candle
 from app.exchange.paper import PaperTradingAdapter
@@ -13,7 +14,7 @@ from app.strategy import IndicatorStrategy
 
 class DemoPaperAdapter(PaperTradingAdapter):
     def get_candles(self, symbol, interval, limit=200):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return [Candle(now - timedelta(minutes=10 - i), Decimal(100 + i), Decimal(100 + i), Decimal(100 + i), Decimal(100 + i), Decimal("1"), now - timedelta(minutes=9 - i)) for i in range(11)]
 
 

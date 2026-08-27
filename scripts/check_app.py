@@ -1,9 +1,8 @@
 """Run offline checks for the application without credentials or network."""
 
 from app.config import Settings
-from app.exchange.paper import PaperTradingAdapter
-from app.monitoring.health import check_health
 from app.database import TradingRepository
+from app.exchange.paper import PaperTradingAdapter
 
 
 def main() -> None:

@@ -3,73 +3,66 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin Dashboard</title>
-  <style>
-    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0f1723; color: #edf2f7; }
-    body { margin: 0; padding: 24px; background: #101a24; }
-    .container { max-width: 1240px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
-    h1 { margin: 0; font-size: 2rem; }
-    .actions { display: flex; gap: 12px; flex-wrap: wrap; }
-    button { border: 0; background: #1f9d77; color: white; border-radius: 8px; padding: 10px 14px; cursor: pointer; font-weight: 600; }
-    button.secondary { background: #2b3744; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .card { background: #162330; border: 1px solid #243445; border-radius: 12px; padding: 18px; }
-    .label { color: #9aa8b8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
-    .value { margin-top: 8px; font-size: 1.8rem; font-weight: 700; }
-    .panel { background: #162330; border: 1px solid #243445; border-radius: 12px; padding: 18px; margin-bottom: 18px; }
-    .control-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
-    input { min-width: 260px; flex: 1; border: 1px solid #3b4b5c; border-radius: 8px; padding: 10px 12px; background: #0f1822; color: #edf2f7; }
-    .hint { color: #9aa8b8; font-size: 0.85rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    th, td { text-align: left; border-bottom: 1px solid #243445; padding: 10px 8px; }
-    .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(31,157,119,.15); color: #7ae0be; font-size: 0.8rem; }
-    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
-    .tab { background: #253443; }
-    .tab.active { background: #1f9d77; }
-    .view { display: none; }
-    .view.active { display: block; }
-    .table-wrap { overflow-x: auto; }
-    .empty { color: #9aa8b8; padding: 18px 8px; }
-    .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
-    .kv div { background: #101a24; padding: 12px; border-radius: 8px; }
-  </style>
+  <title>MK Trader — Admin</title>
+  <meta name="theme-color" content="#0b1018">
+  <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <div>
-        <h1>Admin Dashboard</h1>
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark">MK</div>
+      <h1>MK Trader · Admin</h1>
+    </div>
+    <nav class="nav">
+      <a href="/">Home</a>
+      <a href="/mobile">Dashboard</a>
+      <a href="/admin" class="active">Admin</a>
+      <span id="theme-mount"></span>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- Status header -->
+    <section class="card" style="margin-bottom:18px;">
+      <div class="toolbar" style="margin:0;">
+        <span id="connection" class="connection-pill offline">
+          <span class="dot"></span>
+          <span id="connection-text">Connecting…</span>
+        </span>
+        <div style="flex:1"></div>
+        <button id="refresh" class="secondary">↻ Refresh</button>
+        <button id="start-btn">▶ Start bot</button>
+        <button id="stop-btn" class="secondary">■ Stop bot</button>
       </div>
-      <div class="actions">
-        <button onclick="loadStatus()">Refresh</button>
-        <button class="secondary" onclick="startBot()">Start bot</button>
-        <button class="secondary" onclick="stopBot()">Stop bot</button>
+    </section>
+
+    <!-- Top metrics -->
+    <section class="metric-grid" id="overview"></section>
+
+    <!-- Bot control panel -->
+    <section class="card" style="margin-bottom:18px;">
+      <h2 style="margin:0 0 12px 0; font-size:1.05rem;">Bot control</h2>
+      <div class="toolbar">
+        <div style="flex:1; min-width:260px;">
+          <label style="display:block; font-size:0.78rem; color:var(--text-muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.05em;">Control token</label>
+          <input id="controlToken" type="password" autocomplete="off" placeholder="Bearer token (stored in browser)" style="width:100%;">
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <label style="font-size:0.78rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">Cycles (0 = continuous)</label>
+          <input id="cycles" type="number" min="0" value="0" style="width:140px;">
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <label style="font-size:0.78rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">Interval (s)</label>
+          <input id="interval" type="number" min="1" value="60" style="width:120px;">
+        </div>
+        <button id="save-token" class="secondary">Save token</button>
       </div>
-    </div>
+      <div id="action-status" style="margin-top:10px; color:var(--text-muted); font-size:0.88rem;">Remote control is disabled by default; the server enforces safety checks regardless.</div>
+    </section>
 
-    <div class="grid" id="overview"></div>
-
-    <div class="panel control-bar">
-      <label for="controlToken">Control token</label>
-      <input id="controlToken" type="password" autocomplete="off" placeholder="Bearer token (stored locally)">
-      <button class="secondary" onclick="saveToken()">Save token</button>
-      <span id="actionStatus" class="hint">Remote control is disabled by default.</span>
-    </div>
-
-    <div class="panel">
-      <h2>System status</h2>
-      <div id="statusText" class="pill">Loading...</div>
-      <table>
-        <thead>
-          <tr><th>Setting</th><th>Value</th></tr>
-        </thead>
-        <tbody id="statusTable"></tbody>
-      </table>
-    </div>
-
+    <!-- Tabbed detail views -->
     <div class="tabs" role="tablist">
-      <button class="tab active" data-view="overview">Overview</button>
+      <button class="tab active" data-view="overview-tab">Overview</button>
       <button class="tab" data-view="signals">Signals</button>
       <button class="tab" data-view="orders">Orders</button>
       <button class="tab" data-view="positions">Positions</button>
@@ -78,146 +71,394 @@
       <button class="tab" data-view="events">Events</button>
       <button class="tab" data-view="errors">Errors</button>
       <button class="tab" data-view="risk">Risk</button>
-      <button class="tab" data-view="dex">DEX / Wallet</button>
+      <button class="tab" data-view="dex">DEX</button>
+      <button class="tab" data-view="square">Square</button>
     </div>
 
-    <section id="overviewView" class="panel view active"><h2>Operational overview</h2><div id="overviewDetails" class="kv"></div></section>
-    <section id="signalsView" class="panel view"><h2>Recent signals</h2><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Side</th><th>Confidence</th><th>Strategy</th><th>Reason</th><th>Timestamp</th></tr></thead><tbody id="signalsTable"></tbody></table></div></section>
-    <section id="ordersView" class="panel view"><h2>Recent orders</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>Symbol</th><th>Status</th><th>Quantity</th><th>Average price</th><th>Created</th></tr></thead><tbody id="ordersTable"></tbody></table></div></section>
-    <section id="positionsView" class="panel view"><h2>Open positions</h2><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Side</th><th>Quantity</th><th>Entry</th><th>Mark</th><th>Leverage</th><th>Unrealized PnL</th></tr></thead><tbody id="positionsTable"></tbody></table></div></section>
-    <section id="balancesView" class="panel view"><h2>Balances</h2><div class="table-wrap"><table><thead><tr><th>Asset</th><th>Wallet balance</th><th>Available</th><th>Updated</th></tr></thead><tbody id="balancesTable"></tbody></table></div></section>
-    <section id="tradesView" class="panel view"><h2>Trade history</h2><div class="table-wrap"><table><thead><tr><th>ID</th><th>Symbol</th><th>Side</th><th>Quantity</th><th>Entry</th><th>Exit</th><th>Realized PnL</th><th>Fees</th></tr></thead><tbody id="tradesTable"></tbody></table></div></section>
-    <section id="eventsView" class="panel view"><h2>Runtime events</h2><div class="table-wrap"><table><thead><tr><th>Type</th><th>Message</th><th>Created</th></tr></thead><tbody id="eventsTable"></tbody></table></div></section>
-    <section id="errorsView" class="panel view"><h2>Runtime errors</h2><div class="table-wrap"><table><thead><tr><th>Type</th><th>Message</th><th>Created</th></tr></thead><tbody id="errorsTable"></tbody></table></div></section>
-    <section id="riskView" class="panel view"><h2>Risk guardrails</h2><div id="riskDetails" class="kv"></div></section>
-    <section id="dexView" class="panel view"><h2>DEX and wallet readiness</h2><div id="dexDetails" class="kv"></div></section>
-  </div>
+    <section id="overview-tabView" class="view active card">
+      <h2 style="margin-top:0; font-size:1.05rem;">System status</h2>
+      <div id="status-grid" class="metric-grid"></div>
+      <div class="table-wrap" style="margin-top:12px;">
+        <table>
+          <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+          <tbody id="settingsTable"></tbody>
+        </table>
+      </div>
+    </section>
 
+    <section id="signalsView" class="view card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Symbol</th><th>Side</th><th>Confidence</th><th>Strategy</th><th>Reason</th><th>Time</th></tr></thead>
+          <tbody id="signalsTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="ordersView" class="view card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Symbol</th><th>Status</th><th>Quantity</th><th>Average</th><th>Time</th></tr></thead>
+          <tbody id="ordersTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="positionsView" class="view card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Symbol</th><th>Side</th><th>Quantity</th><th>Entry</th><th>Mark</th><th>Leverage</th><th>PnL</th></tr></thead>
+          <tbody id="positionsTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="balancesView" class="view card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Asset</th><th>Wallet</th><th>Available</th><th>Updated</th></tr></thead>
+          <tbody id="balancesTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tradesView" class="view card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Symbol</th><th>Side</th><th>Quantity</th><th>Entry</th><th>Exit</th><th>PnL</th><th>Fees</th></tr></thead>
+          <tbody id="tradesTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="eventsView" class="view card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Type</th><th>Message</th><th>Time</th></tr></thead>
+          <tbody id="eventsTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="errorsView" class="view card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Type</th><th>Message</th><th>Time</th></tr></thead>
+          <tbody id="errorsTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="riskView" class="view card">
+      <div id="risk-grid" class="metric-grid"></div>
+    </section>
+
+    <section id="dexView" class="view card">
+      <div id="dex-grid" class="metric-grid"></div>
+      <h3 style="margin:24px 0 8px 0; font-size:0.95rem;">DEX order preview</h3>
+      <div class="toolbar">
+        <input id="dex-symbol" placeholder="Symbol" value="BTCUSD" style="width:120px;">
+        <select id="dex-side" style="width:90px;">
+          <option>BUY</option><option>SELL</option>
+        </select>
+        <input id="dex-quantity" type="number" step="any" placeholder="Quantity" value="0.01" style="width:120px;">
+        <input id="dex-price" type="number" step="any" placeholder="Price" value="50000" style="width:120px;">
+        <button id="dex-preview">Preview</button>
+        <button id="dex-approve" class="secondary">Approve</button>
+        <button id="dex-place">Place</button>
+      </div>
+      <pre id="dex-result" style="background:var(--bg); padding:14px; border-radius:8px; margin-top:14px; font-size:0.82rem; max-height:240px; overflow:auto; display:none;"></pre>
+    </section>
+
+    <section id="squareView" class="view card">
+      <div class="toolbar" style="margin-bottom:14px;">
+        <h2 style="margin:0; font-size:1.05rem;">Binance Square</h2>
+        <div style="flex:1"></div>
+        <span id="square-state-pill" class="badge hold">off</span>
+        <button id="square-toggle" class="secondary">Toggle ON / OFF</button>
+        <button id="square-flush">Flush queue (1)</button>
+        <button id="square-refresh" class="secondary">↻</button>
+      </div>
+      <div id="square-grid" class="metric-grid"></div>
+      <h3 style="margin:20px 0 8px 0; font-size:0.95rem;">Manually queue a post</h3>
+      <div class="toolbar">
+        <textarea id="square-message" placeholder="Post text" rows="2" style="flex:1; resize:vertical;"></textarea>
+        <select id="square-priority" style="width:120px;">
+          <option value="1">Priority 1 (high)</option>
+          <option value="3">Priority 3</option>
+          <option value="5" selected>Priority 5 (default)</option>
+          <option value="8">Priority 8</option>
+          <option value="10">Priority 10 (low)</option>
+        </select>
+        <input id="square-category" placeholder="Category" value="manual" style="width:120px;">
+        <button id="square-enqueue">Enqueue</button>
+      </div>
+      <pre id="square-result" style="background:var(--bg); padding:14px; border-radius:8px; margin-top:14px; font-size:0.82rem; max-height:240px; overflow:auto; display:none;"></pre>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
   <script>
-    async function get(path) {
-      const res = await fetch(path);
-      if (!res.ok) throw new Error(res.statusText || 'Request failed');
-      return res.json();
+    mk.initTheme();
+    document.querySelector("#theme-mount").appendChild(mk.themeToggleButton());
+    mk.initTabs();
+
+    const $ = (s) => document.querySelector(s);
+    const tokenInput = $("#controlToken");
+    const savedToken = localStorage.getItem("admin_api_token");
+    if (savedToken) tokenInput.value = savedToken;
+
+    $("#save-token").addEventListener("click", () => {
+      const v = tokenInput.value.trim();
+      if (v) localStorage.setItem("admin_api_token", v);
+      else localStorage.removeItem("admin_api_token");
+      mk.toast(v ? "Control token saved" : "Control token cleared", "success");
+    });
+
+    function setStatus(msg, kind) {
+      const el = $("#action-status");
+      el.textContent = msg;
+      el.style.color = kind === "error" ? "var(--danger)" : kind === "success" ? "var(--buy)" : "var(--text-muted)";
     }
 
-    function escapeHtml(value) {
-      return String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
-    }
-
-    function renderRows(id, rows, columns) {
-      const target = document.querySelector(`#${id}`);
-      target.innerHTML = rows.length ? rows.map(row => `<tr>${columns.map(column => `<td>${escapeHtml(row[column])}</td>`).join('')}</tr>`).join('') : `<tr><td class="empty" colspan="${columns.length}">No records yet</td></tr>`;
-    }
-
-    function renderKeyValues(id, values) {
-      document.querySelector(`#${id}`).innerHTML = Object.entries(values).map(([key, value]) => `<div><div class="label">${escapeHtml(key.replaceAll('_', ' '))}</div><strong>${escapeHtml(value)}</strong></div>`).join('');
-    }
-
-    function renderData(payload) {
-      const status = payload.status;
-      renderKeyValues('overviewDetails', { mode: status.mode, provider: status.provider, symbol: status.symbol, timeframe: status.timeframe, completed_cycles: status.completed_cycles, live_trading_enabled: status.live_trading_enabled, remote_control_enabled: status.remote_control_enabled });
-      renderKeyValues('riskDetails', payload.risk);
-      renderKeyValues('dexDetails', payload.dex);
-      renderRows('signalsTable', payload.signals, ['symbol', 'side', 'confidence', 'strategy', 'reason', 'timestamp']);
-      renderRows('ordersTable', payload.orders, ['order_id', 'symbol', 'status', 'quantity', 'average_price', 'created_at']);
-      renderRows('positionsTable', payload.positions, ['symbol', 'side', 'quantity', 'entry_price', 'mark_price', 'leverage', 'unrealized_pnl']);
-      renderRows('balancesTable', payload.balances, ['asset', 'wallet_balance', 'available_balance', 'updated_at']);
-      renderRows('tradesTable', payload.trades, ['trade_id', 'symbol', 'side', 'quantity', 'entry_price', 'exit_price', 'realized_pnl', 'fees']);
-      renderRows('eventsTable', payload.events, ['event_type', 'message', 'created_at']);
-      renderRows('errorsTable', payload.errors, ['error_type', 'message', 'created_at']);
-    }
-
-    function renderOverview(payload) {
-      const items = [
-        ['healthy', payload.healthy ? 'Yes' : 'No'],
-        ['running', payload.running ? 'Yes' : 'No'],
-        ['mode', payload.mode],
-        ['provider', payload.provider],
-      ];
-      document.querySelector('#overview').innerHTML = items.map(([label, value]) => `
-        <div class="card">
-          <div class="label">${label}</div>
-          <div class="value">${value}</div>
-        </div>
-      `).join('');
-
-      const summary = `${payload.mode} · ${payload.provider} · ${payload.running ? 'running' : 'idle'}`;
-      document.querySelector('#statusText').textContent = summary;
-      document.querySelector('#statusTable').innerHTML = `
-        <tr><td>live_trading_enabled</td><td>${payload.live_trading_enabled}</td></tr>
-        <tr><td>remote_control_enabled</td><td>${payload.remote_control_enabled}</td></tr>
-      `;
-    }
-
-    async function callControl(action) {
-      const token = localStorage.getItem('control_api_token');
-      const headers = { 'Content-Type': 'application/json' };
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-      const response = await fetch(`/control/${action}`, { method: 'POST', headers });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.detail || `Control request failed: ${response.status}`);
-      }
+    async function callControl(action, body) {
+      const headers = { "Content-Type": "application/json" };
+      const token = tokenInput.value.trim();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`/control/${action}`, {
+        method: "POST", headers, body: body ? JSON.stringify(body) : null,
+      });
+      const text = await res.text();
+      let payload = {};
+      try { payload = text ? JSON.parse(text) : {}; } catch { payload = { detail: text }; }
+      if (!res.ok) throw new Error(payload.detail || `Control request failed: ${res.status}`);
       return payload;
     }
 
-    function saveToken() {
-      const token = document.querySelector('#controlToken').value.trim();
-      if (token) {
-        localStorage.setItem('control_api_token', token);
-        document.querySelector('#actionStatus').textContent = 'Control token saved in this browser.';
-      } else {
-        localStorage.removeItem('control_api_token');
-        document.querySelector('#actionStatus').textContent = 'Control token cleared.';
-      }
-    }
-
-    function setActionStatus(message) {
-      document.querySelector('#actionStatus').textContent = message;
-    }
-
-    async function loadStatus() {
+    $("#start-btn").addEventListener("click", async () => {
       try {
-        const payload = await get('/admin/data');
-        renderOverview(payload.status);
-        renderData(payload);
-      } catch (error) {
-        document.querySelector('#statusText').textContent = 'Unavailable';
-      }
-    }
+        const cycles = parseInt($("#cycles").value, 10);
+        const interval = parseFloat($("#interval").value);
+        const result = await callControl("start", { cycles, interval });
+        setStatus(`Start request: ${result.status}`, "success");
+        mk.toast("Bot start requested", "success");
+        load();
+      } catch (e) { setStatus(`Start failed: ${e.message}`, "error"); mk.toast(e.message, "error"); }
+    });
 
-    async function startBot() {
+    $("#stop-btn").addEventListener("click", async () => {
       try {
-        const result = await callControl('start');
-        setActionStatus(`Start request: ${result.status}`);
-        await loadStatus();
-      } catch (error) {
-        setActionStatus(`Start failed: ${error.message}`);
-      }
-    }
+        const result = await callControl("stop");
+        setStatus(`Stop request: ${result.status}`, "success");
+        mk.toast("Bot stop requested", "success");
+        load();
+      } catch (e) { setStatus(`Stop failed: ${e.message}`, "error"); mk.toast(e.message, "error"); }
+    });
 
-    async function stopBot() {
+    // DEX controls
+    function dexPayload() {
+      return {
+        symbol: $("#dex-symbol").value.trim(),
+        side: $("#dex-side").value,
+        order_type: "MARKET",
+        quantity: $("#dex-quantity").value,
+        price: $("#dex-price").value,
+      };
+    }
+    function showDexResult(data) {
+      const el = $("#dex-result");
+      el.style.display = "block";
+      el.textContent = JSON.stringify(data, null, 2);
+    }
+    $("#dex-preview").addEventListener("click", async () => {
+      try { showDexResult(await mk.api.post("/admin/dex/preview", dexPayload())); }
+      catch (e) { mk.toast(e.message, "error"); }
+    });
+    $("#dex-approve").addEventListener("click", async () => {
+      try { showDexResult(await mk.api.post("/admin/dex/approve", dexPayload())); mk.toast("Order approved", "success"); }
+      catch (e) { mk.toast(e.message, "error"); }
+    });
+    $("#dex-place").addEventListener("click", async () => {
+      try { showDexResult(await mk.api.post("/admin/dex/place", dexPayload())); mk.toast("Order placed", "success"); }
+      catch (e) { mk.toast(e.message, "error"); }
+    });
+
+    // Square controls
+    function showSquareResult(data) {
+      const el = $("#square-result");
+      el.style.display = "block";
+      el.textContent = JSON.stringify(data, null, 2);
+    }
+    async function refreshSquare() {
       try {
-        const result = await callControl('stop');
-        setActionStatus(`Stop request: ${result.status}`);
-        await loadStatus();
+        const data = await mk.api.get("/admin/square/status");
+        const pill = $("#square-state-pill");
+        pill.className = `badge ${data.enabled ? "buy" : "hold"}`;
+        pill.textContent = data.enabled ? "on" : "off";
+        const s = data.status;
+        const items = [
+          ["API key", data.configured ? "set" : "missing", data.configured ? "connected" : "disconnected"],
+          ["Toggle", data.enabled ? "ON" : "OFF", data.enabled ? "buy" : "hold"],
+          ["Posted today", `${s.today_count} / ${s.daily_limit}`, null],
+          ["Remaining", s.remaining, null],
+          ["Queued", s.queued.total, s.queued.total ? "live" : null],
+          ["By category", Object.keys(s.queued.by_category || {}).length ? Object.entries(s.queued.by_category).map(([k,v]) => `${k}=${v}`).join(" · ") : "—", null],
+          ["Last toggle", s.last_toggle || "never", null],
+        ];
+        $("#square-grid").innerHTML = items.map(([k, v, kind]) => `
+          <div class="card metric">
+            <div class="label">${k}</div>
+            <div class="value" style="font-size:1.2rem;">${mk.escapeHtml(String(v))}</div>
+            ${kind ? `<div><span class="badge ${kind}">${mk.escapeHtml(String(v))}</span></div>` : ""}
+          </div>
+        `).join("");
+      } catch (e) { mk.toast(`Square status failed: ${e.message}`, "error"); }
+    }
+    $("#square-refresh").addEventListener("click", refreshSquare);
+    $("#square-toggle").addEventListener("click", async () => {
+      try {
+        const data = await mk.api.get("/admin/square/status");
+        const result = await mk.api.post("/admin/square/toggle", { enabled: !data.enabled });
+        mk.toast(`Square posting ${result.enabled ? "ON" : "OFF"}`, "success");
+        refreshSquare();
+      } catch (e) { mk.toast(e.message, "error"); }
+    });
+    $("#square-flush").addEventListener("click", async () => {
+      try {
+        const result = await mk.api.post("/admin/square/flush", { count: 1 });
+        showSquareResult(result);
+        mk.toast(`Posted ${result.posted}, failed ${result.failed}`, result.posted ? "success" : "error");
+        refreshSquare();
+      } catch (e) { mk.toast(e.message, "error"); }
+    });
+    $("#square-enqueue").addEventListener("click", async () => {
+      const message = $("#square-message").value.trim();
+      if (!message) { mk.toast("Message is required", "error"); return; }
+      try {
+        const result = await mk.api.post("/admin/square/enqueue", {
+          message,
+          priority: parseInt($("#square-priority").value, 10),
+          category: $("#square-category").value.trim() || "manual",
+        });
+        showSquareResult(result);
+        mk.toast("Queued", "success");
+        $("#square-message").value = "";
+        refreshSquare();
+      } catch (e) { mk.toast(e.message, "error"); }
+    });
+
+    function renderOverview(payload) {
+      const status = payload.status;
+      $("#connection").classList.remove("offline"); $("#connection").classList.add("online");
+      $("#connection-text").textContent = `${status.mode} · ${status.provider} · ${status.running ? "running" : "idle"}`;
+
+      const topMetrics = [
+        ["Mode", status.mode, status.mode === "live" ? "live" : "paper"],
+        ["Provider", status.provider, null],
+        ["Running", status.running ? "Yes" : "No", status.running ? "buy" : "hold"],
+        ["Cycles", status.completed_cycles, null],
+        ["Live enabled", status.live_trading_enabled ? "Yes" : "No", status.live_trading_enabled ? "live" : "hold"],
+        ["Remote ctrl", status.remote_control_enabled ? "Yes" : "No", status.remote_control_enabled ? "connected" : "disconnected"],
+      ];
+      $("#overview").innerHTML = topMetrics.map(([k, v, badgeKind]) => `
+        <div class="card metric">
+          <div class="label">${k}</div>
+          <div class="value">${v}</div>
+          ${badgeKind ? `<div><span class="badge ${badgeKind}">${v}</span></div>` : ""}
+        </div>
+      `).join("");
+
+      $("#status-grid").innerHTML = [
+        ["Mode", status.mode], ["Provider", status.provider], ["Symbol", status.symbol],
+        ["Timeframe", status.timeframe], ["Running", status.running],
+        ["Completed cycles", status.completed_cycles],
+      ].map(([k, v]) => `
+        <div class="card metric"><div class="label">${k}</div><div class="value">${v}</div></div>
+      `).join("");
+
+      $("#settingsTable").innerHTML = [
+        ["live_trading_enabled", status.live_trading_enabled],
+        ["remote_control_enabled", status.remote_control_enabled],
+      ].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
+
+      $("#risk-grid").innerHTML = Object.entries(payload.risk).map(([k, v]) => `
+        <div class="card metric"><div class="label">${k.replaceAll("_", " ")}</div><div class="value">${v}</div></div>
+      `).join("");
+
+      $("#dex-grid").innerHTML = Object.entries(payload.dex).map(([k, v]) => `
+        <div class="card metric">
+          <div class="label">${k.replaceAll("_", " ")}</div>
+          <div class="value" style="font-size:1rem; word-break:break-all;">${typeof v === "boolean" ? (v ? "Yes" : "No") : v || "—"}</div>
+        </div>
+      `).join("");
+    }
+
+    function paintSignals(rows) {
+      const tbody = $("#signalsTable");
+      if (!rows.length) { tbody.innerHTML = `<tr><td class="empty" colspan="6">No signals yet</td></tr>`; return; }
+      tbody.innerHTML = rows.map((r) => `
+        <tr>
+          <td><strong>${mk.escapeHtml(r.symbol)}</strong></td>
+          <td>${mk.badge(r.side)}</td>
+          <td>${mk.confidenceBar(r.confidence)}</td>
+          <td>${mk.escapeHtml(r.strategy)}</td>
+          <td style="color:var(--text-muted);">${mk.escapeHtml((r.reason || "").split(";")[0])}</td>
+          <td style="color:var(--text-muted); font-size:0.82rem;">${mk.relativeTime(r.timestamp)}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function load() {
+      try {
+        const data = await mk.api.get("/admin/data");
+        renderOverview(data);
+        paintSignals(data.signals);
+
+        mk.renderRows("ordersTable", data.orders, ["order_id", "symbol", "status", "quantity", "average_price", "created_at"]);
+        document.querySelectorAll("#ordersTable tr").forEach((tr) => {
+          const t = tr.children[5]?.textContent;
+          if (t) tr.children[5].textContent = mk.relativeTime(t);
+        });
+
+        mk.renderRows("positionsTable", data.positions, ["symbol", "side", "quantity", "entry_price", "mark_price", "leverage", "unrealized_pnl"]);
+        document.querySelectorAll("#positionsTable tr").forEach((tr) => {
+          const side = tr.children[1]?.textContent;
+          if (side) tr.children[1].innerHTML = mk.badge(side);
+        });
+
+        mk.renderRows("balancesTable", data.balances, ["asset", "wallet_balance", "available_balance", "updated_at"]);
+        document.querySelectorAll("#balancesTable tr").forEach((tr) => {
+          const t = tr.children[3]?.textContent;
+          if (t) tr.children[3].textContent = mk.relativeTime(t);
+        });
+
+        mk.renderRows("tradesTable", data.trades, ["trade_id", "symbol", "side", "quantity", "entry_price", "exit_price", "realized_pnl", "fees"]);
+        document.querySelectorAll("#tradesTable tr").forEach((tr) => {
+          const side = tr.children[2]?.textContent;
+          if (side) tr.children[2].innerHTML = mk.badge(side);
+        });
+
+        mk.renderRows("eventsTable", data.events, ["event_type", "message", "created_at"]);
+        document.querySelectorAll("#eventsTable tr").forEach((tr) => {
+          const t = tr.children[2]?.textContent;
+          if (t) tr.children[2].textContent = mk.relativeTime(t);
+        });
+
+        mk.renderRows("errorsTable", data.errors, ["error_type", "message", "created_at"]);
+        document.querySelectorAll("#errorsTable tr").forEach((tr) => {
+          const t = tr.children[2]?.textContent;
+          if (t) tr.children[2].textContent = mk.relativeTime(t);
+        });
       } catch (error) {
-        setActionStatus(`Stop failed: ${error.message}`);
+        $("#connection").classList.remove("online"); $("#connection").classList.add("offline");
+        $("#connection-text").textContent = "API unavailable";
+        mk.toast(`API unavailable: ${error.message}`, "error");
       }
     }
 
-    const savedToken = localStorage.getItem('control_api_token');
-    if (savedToken) document.querySelector('#controlToken').value = savedToken;
-    document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(item => item.classList.remove('active'));
-      document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-      tab.classList.add('active');
-      document.querySelector(`#${tab.dataset.view}View`).classList.add('active');
-    }));
-    loadStatus();
-    setInterval(loadStatus, 15000);
+    $("#refresh").addEventListener("click", load);
+    load();
+    setInterval(load, 15000);
   </script>
 </body>
 </html>

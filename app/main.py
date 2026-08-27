@@ -2,6 +2,7 @@
 
 import argparse
 from decimal import Decimal
+
 from .config.settings import Settings
 from .monitoring.logger import configure_logging
 
@@ -36,11 +37,11 @@ def main() -> None:
         from .database import TradingRepository
         from .execution import OrderManager
         from .market_data import AdapterMarketDataProvider
+        from .notifications import DeduplicatingPublisher, TelegramNotifier, TelegramSignalPublisher
         from .risk import PositionSizer, RiskManager
         from .runtime import BotRunner, TradingCycle
         from .signals import SignalEngine
         from .strategy import create_strategy
-        from .notifications import DeduplicatingPublisher, TelegramNotifier, TelegramSignalPublisher
         publisher = None
         if settings.enable_telegram and settings.telegram_bot_token and settings.telegram_chat_id:
             publisher = DeduplicatingPublisher(TelegramSignalPublisher(TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)))

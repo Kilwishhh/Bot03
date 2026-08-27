@@ -1,9 +1,12 @@
 """Guarded signal generation pipeline."""
 
+from datetime import UTC
+
 from app.exchange.models import Candle
 from app.market_data import MarketDataHealth
-from .models import Signal, SignalSide
 from app.strategy.base import Strategy
+
+from .models import Signal, SignalSide
 
 
 class SignalEngine:
@@ -20,5 +23,5 @@ class SignalEngine:
 
     @staticmethod
     def _hold(symbol: str, reason: str) -> Signal:
-        from datetime import datetime, timezone
-        return Signal(symbol, SignalSide.HOLD, 0.0, datetime.now(timezone.utc), [reason], "SignalEngine")
+        from datetime import datetime
+        return Signal(symbol, SignalSide.HOLD, 0.0, datetime.now(UTC), [reason], "SignalEngine")

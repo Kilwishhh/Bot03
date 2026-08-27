@@ -1,20 +1,33 @@
 """Safe HTTP API foundation for the mobile application."""
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from app.api.auth import require_admin_token
+from app.api.security import (
+    HTTPSEnforcementMiddleware,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    get_audit_logger,
+)
 from app.config import ExchangeProvider, Settings
 from app.database import TradingRepository
-from app.api.auth import require_admin_token
 from app.exchange.models import OrderRequest, OrderSide, OrderType
 from app.execution.dex_gate import DexOrderGate
-import asyncio
-import json
+from app.notifications import BinanceSquarePoster
 
+STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="Crypto Trading Bot API", version="0.1.0")
+
+# Serve shared CSS/JS for the web dashboards.
+if STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # include websocket router (read-only)
 try:
@@ -45,6 +58,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Security middleware: security headers, optional HTTPS enforcement, rate limit.
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(HTTPSEnforcementMiddleware, require_https=Settings().api_require_https)
+app.add_middleware(RateLimitMiddleware, per_minute=Settings().api_rate_limit_per_minute)
+
 
 @app.get("/mobile", include_in_schema=False)
 def mobile() -> FileResponse:
@@ -61,9 +79,9 @@ def service_worker() -> FileResponse:
     return FileResponse(Path(__file__).with_name("service-worker.js"), media_type="application/javascript")
 
 
-@app.get("/")
-def root() -> dict[str, str]:
-    return {"name": "Crypto Trading Bot API", "status": "ready"}
+@app.get("/", include_in_schema=False)
+def landing() -> FileResponse:
+    return FileResponse(Path(__file__).with_name("index.html"))
 
 
 @app.get("/health")
@@ -148,7 +166,7 @@ def trades(limit: int = 20) -> list[dict[str, object]]:
     try:
         rows = repository.recent_trades(limit)
         keys = ("trade_id", "symbol", "side", "quantity", "entry_price", "exit_price", "realized_pnl", "fees", "strategy", "entry_time", "exit_time")
-        return [dict(zip(keys, row)) for row in rows]
+        return [dict(zip(keys, row, strict=False)) for row in rows]
     finally:
         repository.close()
 
@@ -167,7 +185,7 @@ def positions() -> list[dict[str, object]]:
     repository = TradingRepository(Settings().database_path)
     try:
         keys = ("symbol", "side", "quantity", "entry_price", "mark_price", "leverage", "unrealized_pnl", "updated_at")
-        return [dict(zip(keys, row)) for row in repository.positions()]
+        return [dict(zip(keys, row, strict=False)) for row in repository.positions()]
     finally:
         repository.close()
 
@@ -232,6 +250,7 @@ def admin_summary(_: None = Depends(require_admin_token)) -> dict[str, object]:
 @app.get("/admin/data")
 def admin_data(_: None = Depends(require_admin_token)) -> dict[str, object]:
     settings = Settings()
+    square = _build_square_poster()
     return {
         "status": admin_status(),
         "metrics": metrics(),
@@ -258,6 +277,7 @@ def admin_data(_: None = Depends(require_admin_token)) -> dict[str, object]:
             "chain_configured": settings.dex_chain_id is not None and bool(settings.dex_rpc_url),
             "execution_requires_approval": True,
         },
+        "square": square.get_status(),
     }
 
 
@@ -282,8 +302,8 @@ def _build_dex_request(payload: dict) -> OrderRequest:
     """Build an OrderRequest from a JSON payload, validating numeric fields."""
     try:
         quantity = Decimal(str(payload["quantity"]))
-    except (KeyError, InvalidOperation):
-        raise HTTPException(status_code=400, detail="quantity is required and must be a number")
+    except (KeyError, InvalidOperation) as exc:
+        raise HTTPException(status_code=400, detail="quantity is required and must be a number") from exc
     if quantity <= 0:
         raise HTTPException(status_code=400, detail="quantity must be positive")
     price_raw = payload.get("price")
@@ -291,8 +311,8 @@ def _build_dex_request(payload: dict) -> OrderRequest:
     if price_raw is not None and price_raw != "":
         try:
             price = Decimal(str(price_raw))
-        except InvalidOperation:
-            raise HTTPException(status_code=400, detail="price must be a number")
+        except InvalidOperation as exc:
+            raise HTTPException(status_code=400, detail="price must be a number") from exc
         if price <= 0:
             raise HTTPException(status_code=400, detail="price must be positive")
     return OrderRequest(
@@ -306,15 +326,21 @@ def _build_dex_request(payload: dict) -> OrderRequest:
 
 
 @app.post("/admin/dex/preview")
-def admin_dex_preview(payload: dict, _: None = Depends(require_admin_token)) -> dict[str, object]:
+def admin_dex_preview(payload: dict, request: Request, _: None = Depends(require_admin_token)) -> dict[str, object]:
     """Preview a DEX order without placing it. Requires admin token."""
     settings = Settings()
     exchange = _build_dex_exchange(settings)
-    request = _build_dex_request(payload)
+    dex_request = _build_dex_request(payload)
     gate = DexOrderGate(exchange)
     if not gate.supports_preview():
         raise HTTPException(status_code=400, detail="adapter does not support preview/approval")
-    preview = exchange.preview_order(request)
+    preview = exchange.preview_order(dex_request)
+    _audit(
+        request,
+        "dex.preview",
+        {"symbol": str(dex_request.symbol), "side": str(dex_request.side)},
+        preview.status,
+    )
     return {
         "symbol": preview.symbol,
         "side": preview.side,
@@ -329,7 +355,7 @@ def admin_dex_preview(payload: dict, _: None = Depends(require_admin_token)) -> 
 
 
 @app.post("/admin/dex/approve")
-def admin_dex_approve(payload: dict, _: None = Depends(require_admin_token)) -> dict[str, object]:
+def admin_dex_approve(payload: dict, request: Request, _: None = Depends(require_admin_token)) -> dict[str, object]:
     """Record the wallet owner's approval of a previously-returned preview.
 
     The caller (typically the admin UI backed by a WalletConnect session) is
@@ -338,12 +364,18 @@ def admin_dex_approve(payload: dict, _: None = Depends(require_admin_token)) -> 
     """
     settings = Settings()
     exchange = _build_dex_exchange(settings)
-    request = _build_dex_request(payload)
+    dex_request = _build_dex_request(payload)
     gate = DexOrderGate(exchange)
     if not gate.supports_preview():
         raise HTTPException(status_code=400, detail="adapter does not support preview/approval")
-    preview = exchange.preview_order(request)
+    preview = exchange.preview_order(dex_request)
     exchange.approve_order(preview)
+    _audit(
+        request,
+        "dex.approve",
+        {"client_order_id": preview.client_order_id, "wallet": preview.wallet_address},
+        "approved",
+    )
     return {
         "approved": True,
         "client_order_id": preview.client_order_id,
@@ -352,19 +384,21 @@ def admin_dex_approve(payload: dict, _: None = Depends(require_admin_token)) -> 
 
 
 @app.post("/admin/dex/place")
-def admin_dex_place(payload: dict, _: None = Depends(require_admin_token)) -> dict[str, object]:
-    """Preview, mark approved, then place a DEX order. Admin-only.
-
-    Use this when the wallet owner has already approved via WalletConnect and
-    the admin wants to execute the now-approved order through the framework.
-    """
+def admin_dex_place(payload: dict, request: Request, _: None = Depends(require_admin_token)) -> dict[str, object]:
+    """Preview, mark approved, then place a DEX order. Admin-only."""
     settings = Settings()
     exchange = _build_dex_exchange(settings)
-    request = _build_dex_request(payload)
+    dex_request = _build_dex_request(payload)
     gate = DexOrderGate(exchange)
     if not gate.supports_preview():
         raise HTTPException(status_code=400, detail="adapter does not support preview/approval")
-    result = gate.approve_and_place(request)
+    result = gate.approve_and_place(dex_request)
+    _audit(
+        request,
+        "dex.place",
+        {"symbol": str(dex_request.symbol), "side": str(dex_request.side)},
+        f"order_id={result.order_id} status={result.status}",
+    )
     return {
         "order_id": result.order_id,
         "symbol": result.symbol,
@@ -372,3 +406,87 @@ def admin_dex_place(payload: dict, _: None = Depends(require_admin_token)) -> di
         "executed_quantity": str(result.executed_quantity),
         "average_price": str(result.average_price) if result.average_price is not None else None,
     }
+
+
+def _build_square_poster() -> BinanceSquarePoster:
+    """Construct a BinanceSquarePoster using the configured settings.
+
+    The poster is always created (it works without an API key — it just
+    queues messages). The daily limit and endpoint are read from the
+    live settings so an admin can change them without restarting.
+    """
+    settings = Settings()
+    return BinanceSquarePoster(
+        api_key=settings.binance_square_api_key,
+        endpoint=settings.binance_square_endpoint,
+        daily_limit=settings.binance_square_daily_limit,
+        state_dir=settings.binance_square_state_dir,
+    )
+
+
+def _audit(request: Request, action: str, detail: dict, result: str) -> None:
+    """Write a privileged-action entry to the audit log.
+
+    The actor is recorded as the client IP (no real identity exists yet);
+    this still gives operators a way to correlate a flood of admin calls
+    with a single caller. The function never raises.
+    """
+    actor = request.client.host if request.client else "unknown"
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        actor = forwarded.split(",")[0].strip() or actor
+    get_audit_logger().record(actor=actor, action=action, detail=detail, result=result)
+
+
+@app.get("/admin/square/status")
+def admin_square_status(_: None = Depends(require_admin_token)) -> dict[str, object]:
+    """Return the Binance Square poster's status, queue, and toggle state."""
+    settings = Settings()
+    poster = _build_square_poster()
+    return {
+        "configured": bool(settings.binance_square_api_key),
+        "enabled": poster.is_posting_enabled(),
+        "status": poster.get_status(),
+    }
+
+
+@app.post("/admin/square/toggle")
+def admin_square_toggle(payload: dict, request: Request, _: None = Depends(require_admin_token)) -> dict[str, object]:
+    """Turn Binance Square posting ON or OFF. Persisted to disk."""
+    if "enabled" not in payload:
+        raise HTTPException(status_code=400, detail="enabled (bool) is required")
+    poster = _build_square_poster()
+    new_state = poster._state.toggle(bool(payload["enabled"]))
+    _audit(request, "square.toggle", {"enabled": new_state}, "ok")
+    return {"enabled": new_state, "configured": poster.api_available}
+
+
+@app.post("/admin/square/enqueue")
+def admin_square_enqueue(payload: dict, request: Request, _: None = Depends(require_admin_token)) -> dict[str, object]:
+    """Manually add a post to the queue (does NOT post it)."""
+    message = str(payload.get("message", "")).strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="message is required")
+    priority = int(payload.get("priority", 5))
+    category = str(payload.get("category", "manual"))
+    poster = _build_square_poster()
+    poster.enqueue(message, priority=priority, category=category)
+    _audit(request, "square.enqueue", {"category": category, "priority": priority}, "ok")
+    return {"queued": True, "status": poster.get_status()}
+
+
+@app.post("/admin/square/flush")
+def admin_square_flush(payload: dict, request: Request, _: None = Depends(require_admin_token)) -> dict[str, object]:
+    """Flush up to ``count`` queued posts (default 1). Returns the flush summary."""
+    count = int(payload.get("count", 1)) if payload else 1
+    poster = _build_square_poster()
+    result = poster.flush_queue(count=count)
+    _audit(request, "square.flush", {"count": count}, f"posted={result['posted']}")
+    return result
+
+
+@app.get("/admin/audit/tail")
+def admin_audit_tail(limit: int = 50, _: None = Depends(require_admin_token)) -> dict[str, object]:
+    """Return the most recent audit-log entries (newest last)."""
+    limit = max(1, min(limit, 500))
+    return {"entries": get_audit_logger().tail(limit=limit), "limit": limit}

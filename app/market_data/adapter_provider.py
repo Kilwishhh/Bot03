@@ -2,6 +2,7 @@
 
 from app.exchange.base import ExchangeAdapter
 from app.exchange.models import Candle, Ticker
+
 from .base import MarketDataProvider
 
 

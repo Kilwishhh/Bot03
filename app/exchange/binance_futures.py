@@ -1,10 +1,12 @@
 """Binance Futures adapter. Credentials are supplied only through settings."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
+
+from app.monitoring.retry import retry_read
+
 from .base import ExchangeAdapter
 from .models import Balance, Candle, OrderRequest, OrderResult, OrderSide, Position, Ticker
-from app.monitoring.retry import retry_read
 
 
 class BinanceFuturesAdapter(ExchangeAdapter):
@@ -20,14 +22,14 @@ class BinanceFuturesAdapter(ExchangeAdapter):
 
     def get_ticker(self, symbol: str) -> Ticker:
         row = retry_read(lambda: self._client.futures_symbol_ticker(symbol=symbol))
-        return Ticker(symbol, Decimal(row["price"]), datetime.now(timezone.utc))
+        return Ticker(symbol, Decimal(row["price"]), datetime.now(UTC))
 
     def get_candles(self, symbol: str, interval: str, limit: int = 200) -> list[Candle]:
         rows = retry_read(lambda: self._client.futures_klines(symbol=symbol, interval=interval, limit=limit))
         return [Candle(
-            datetime.fromtimestamp(row[0] / 1000, timezone.utc), Decimal(row[1]), Decimal(row[2]),
+            datetime.fromtimestamp(row[0] / 1000, UTC), Decimal(row[1]), Decimal(row[2]),
             Decimal(row[3]), Decimal(row[4]), Decimal(row[5]),
-            datetime.fromtimestamp(row[6] / 1000, timezone.utc),
+            datetime.fromtimestamp(row[6] / 1000, UTC),
         ) for row in rows]
 
     def get_symbols(self) -> list[str]:

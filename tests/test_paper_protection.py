@@ -1,4 +1,5 @@
 from decimal import Decimal
+
 from app.exchange.models import OrderRequest, OrderSide, OrderType
 from app.exchange.paper import PaperTradingAdapter
 

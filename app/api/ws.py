@@ -1,7 +1,10 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.database import TradingRepository
 import asyncio
+import contextlib
 import json
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+from app.database import TradingRepository
 
 router = APIRouter()
 
@@ -32,9 +35,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         return
     except Exception as e:
-        try:
+        with contextlib.suppress(Exception):
             await websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
-        except Exception:
-            pass
     finally:
         repository.close()

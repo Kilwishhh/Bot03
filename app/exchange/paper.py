@@ -1,8 +1,9 @@
 """Deterministic local adapter for paper trading."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
+
 from .base import ExchangeAdapter
 from .models import Balance, Candle, OrderRequest, OrderResult, Position, Ticker
 
@@ -24,7 +25,7 @@ class PaperTradingAdapter(ExchangeAdapter):
     def get_ticker(self, symbol: str) -> Ticker:
         position = self._positions.get(symbol)
         price = self._prices.get(symbol) or (position.mark_price if position else Decimal("100"))
-        return Ticker(symbol, price, datetime.now(timezone.utc))
+        return Ticker(symbol, price, datetime.now(UTC))
 
     def get_candles(self, symbol: str, interval: str, limit: int = 200) -> list[Candle]:
         return []

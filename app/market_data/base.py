@@ -1,6 +1,7 @@
 """Market-data provider contract."""
 
 from abc import ABC, abstractmethod
+
 from app.exchange.models import Candle, Ticker
 
 

@@ -1,6 +1,7 @@
 """Application configuration with conservative trading defaults."""
 
 from enum import StrEnum
+
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -32,6 +33,9 @@ class Settings(BaseSettings):
     timeframe: str = "15m"
     poll_interval_seconds: float = Field(default=60, gt=0)
     api_allowed_origins: str = "http://localhost:3000,http://localhost:8080"
+    api_rate_limit_per_minute: int = Field(default=60, ge=10, le=1000)
+    api_require_https: bool = False
+    api_audit_log_dir: str = "./audit"
     risk_per_trade: float = Field(default=0.01, gt=0, le=0.05)
     max_daily_loss: float = Field(default=0.03, gt=0, le=1)
     max_open_positions: int = Field(default=3, ge=1)
@@ -45,9 +49,24 @@ class Settings(BaseSettings):
     rsi_period: int = Field(default=14, ge=2)
     bb_period: int = Field(default=20, ge=2)
     adx_period: int = Field(default=14, ge=2)
+    # MACD crossover strategy
+    macd_fast: int = Field(default=12, ge=2)
+    macd_slow: int = Field(default=26, ge=3)
+    macd_signal: int = Field(default=9, ge=2)
+    # Bollinger strategy
+    bollinger_std: float = Field(default=2.0, gt=0)
+    bollinger_mode: str = "breakout"  # "breakout" or "reversion"
+    # RSI mean-reversion strategy
+    rsi_oversold: float = Field(default=30.0, gt=0, lt=50)
+    rsi_overbought: float = Field(default=70.0, gt=50, lt=100)
     enable_telegram: bool = False
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    enable_binance_square: bool = False
+    binance_square_api_key: str = ""
+    binance_square_endpoint: str = "https://www.binance.com/bapi/composite/v1/public/pgc/openApi/content/add"
+    binance_square_daily_limit: int = Field(default=95, ge=1, le=1000)
+    binance_square_state_dir: str = "."
     walletconnect_project_id: str = ""
     dex_chain_id: int | None = None
     dex_rpc_url: str = ""
@@ -73,8 +92,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def enforce_live_safety(self) -> "Settings":
-        if self.strategy != "indicator":
-            raise ValueError("unsupported strategy; use the registered strategy name 'indicator'")
+        from app.strategy import is_registered
+        if not is_registered(self.strategy):
+            from app.strategy import available_strategies
+            raise ValueError(
+                f"unsupported strategy: {self.strategy!r}. "
+                f"Available: {', '.join(available_strategies())}"
+            )
         if self.ema_fast >= self.ema_slow:
             raise ValueError("EMA_FAST must be lower than EMA_SLOW")
         if self.trading_mode is TradingMode.DEX and self.exchange_provider not in (ExchangeProvider.DEX, ExchangeProvider.HYPERLIQUID):
@@ -88,9 +112,8 @@ class Settings(BaseSettings):
                 raise ValueError("Live mode requires explicit confirmation")
             if not self.binance_api_key or not self.binance_api_secret:
                 raise ValueError("Live mode requires Binance credentials")
-        if self.trading_mode is TradingMode.TESTNET and self.exchange_provider is ExchangeProvider.BINANCE:
-            if not self.binance_api_key or not self.binance_api_secret:
-                raise ValueError("Testnet mode requires Binance credentials")
+        if self.trading_mode is TradingMode.TESTNET and self.exchange_provider is ExchangeProvider.BINANCE and (not self.binance_api_key or not self.binance_api_secret):
+            raise ValueError("Testnet mode requires Binance credentials")
         if self.trading_mode is TradingMode.DEX:
             if not self.walletconnect_project_id:
                 raise ValueError("DEX mode requires WalletConnect project configuration")
@@ -98,4 +121,6 @@ class Settings(BaseSettings):
                 raise ValueError("DEX mode requires chain ID and RPC URL")
         if self.enable_remote_control and not self.control_api_token:
             raise ValueError("Remote control requires CONTROL_API_TOKEN when ENABLE_REMOTE_CONTROL=true")
+        if self.enable_binance_square and not self.binance_square_api_key:
+            raise ValueError("Binance Square posting requires BINANCE_SQUARE_API_KEY when ENABLE_BINANCE_SQUARE=true")
         return self

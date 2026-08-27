@@ -1,4 +1,5 @@
 import pytest
+
 from app.notifications import TelegramNotifier
 
 

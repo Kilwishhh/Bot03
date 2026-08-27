@@ -6,12 +6,14 @@ must be added through an official signing flow and explicit user approval.
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from urllib.request import Request, urlopen
+
+from app.monitoring.retry import retry_read
+
 from .base import ExchangeAdapter
 from .models import Balance, Candle, OrderRequest, OrderResult, Position, Ticker
-from app.monitoring.retry import retry_read
 
 
 @dataclass(frozen=True)
@@ -76,12 +78,12 @@ class HyperliquidAdapter(ExchangeAdapter):
 
     def get_ticker(self, symbol: str) -> Ticker:
         prices = self._info({"type": "allMids"})
-        return Ticker(symbol, Decimal(str(prices[symbol])), datetime.now(timezone.utc))
+        return Ticker(symbol, Decimal(str(prices[symbol])), datetime.now(UTC))
 
     def get_candles(self, symbol: str, interval: str, limit: int = 200) -> list[Candle]:
-        end = int(datetime.now(timezone.utc).timestamp() * 1000)
+        end = int(datetime.now(UTC).timestamp() * 1000)
         rows = self._info({"type": "candleSnapshot", "req": {"coin": symbol, "interval": interval, "startTime": 0, "endTime": end}})
-        return [Candle(datetime.fromtimestamp(row["t"] / 1000, timezone.utc), Decimal(row["o"]), Decimal(row["h"]), Decimal(row["l"]), Decimal(row["c"]), Decimal(row["v"]), datetime.fromtimestamp(row["T"] / 1000, timezone.utc)) for row in rows[-limit:]]
+        return [Candle(datetime.fromtimestamp(row["t"] / 1000, UTC), Decimal(row["o"]), Decimal(row["h"]), Decimal(row["l"]), Decimal(row["c"]), Decimal(row["v"]), datetime.fromtimestamp(row["T"] / 1000, UTC)) for row in rows[-limit:]]
 
     def get_symbols(self) -> list[str]:
         metadata = self._info({"type": "meta"})

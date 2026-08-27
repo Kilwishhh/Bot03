@@ -1,7 +1,8 @@
 """Run one local paper-trading cycle without credentials or network access."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+
 from app.database import TradingRepository
 from app.exchange.models import Candle
 from app.exchange.paper import PaperTradingAdapter
@@ -11,7 +12,7 @@ from app.strategy import IndicatorStrategy
 
 
 def build_demo_candles() -> list[Candle]:
-    start = datetime.now(timezone.utc)
+    start = datetime.now(UTC)
     prices = [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110]
     return [Candle(
         start + timedelta(minutes=index), Decimal(price), Decimal(price), Decimal(price), Decimal(price), Decimal("1"),

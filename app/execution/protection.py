@@ -2,6 +2,7 @@
 
 from app.exchange.base import ExchangeAdapter
 from app.exchange.models import OrderRequest, OrderResult, OrderSide, OrderType, Position
+
 from .order_validator import validate_order
 
 

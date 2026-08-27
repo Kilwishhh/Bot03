@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Iterable
 from decimal import Decimal
 from pathlib import Path
-from typing import Iterable
 
 from .settings import ExchangeProvider, Settings, TradingMode
-
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +39,11 @@ def _is_placeholder(value: str) -> bool:
 
 
 def _validate_credentials_present(settings: Settings) -> None:
-    if settings.trading_mode is TradingMode.LIVE and settings.exchange_provider is ExchangeProvider.BINANCE:
-        if not settings.binance_api_key or not settings.binance_api_secret:
-            _error("Live Binance mode requires both BINANCE_API_KEY and BINANCE_API_SECRET")
-    elif settings.trading_mode is TradingMode.TESTNET and settings.exchange_provider is ExchangeProvider.BINANCE:
-        if not settings.binance_api_key or not settings.binance_api_secret:
-            _warn("Testnet mode without Binance credentials; API calls will fail")
+    missing = not settings.binance_api_key or not settings.binance_api_secret
+    if settings.trading_mode is TradingMode.LIVE and settings.exchange_provider is ExchangeProvider.BINANCE and missing:
+        _error("Live Binance mode requires both BINANCE_API_KEY and BINANCE_API_SECRET")
+    elif settings.trading_mode is TradingMode.TESTNET and settings.exchange_provider is ExchangeProvider.BINANCE and missing:
+        _warn("Testnet mode without Binance credentials; API calls will fail")
 
 
 def _validate_credential_format(settings: Settings) -> None:

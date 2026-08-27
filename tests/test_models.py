@@ -1,6 +1,7 @@
+from datetime import UTC, datetime
 from decimal import Decimal
-from datetime import datetime, timezone
-from app.exchange.models import Candle, OrderSide, OrderType, OrderRequest
+
+from app.exchange.models import Candle, OrderRequest, OrderSide, OrderType
 from app.exchange.precision import normalize, validate_step
 
 
@@ -11,7 +12,7 @@ def test_order_request_is_exchange_neutral():
 
 
 def test_candle_contains_ohlcv():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     candle = Candle(now, Decimal("1"), Decimal("2"), Decimal("0.5"), Decimal("1.5"), Decimal("10"), now)
     assert candle.high > candle.low
 

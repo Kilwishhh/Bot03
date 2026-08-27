@@ -1,5 +1,7 @@
-from fastapi import Header, HTTPException
 import secrets
+
+from fastapi import Header, HTTPException
+
 from app.config import Settings
 
 

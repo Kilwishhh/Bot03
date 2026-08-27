@@ -1,6 +1,6 @@
 """Risk-based position sizing with conservative quantity limits."""
 
-from decimal import Decimal, ROUND_DOWN
+from decimal import ROUND_DOWN, Decimal
 
 
 class PositionSizer:

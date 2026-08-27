@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
+
 from app.database import TradingRepository
 from app.exchange.models import Balance, OrderResult, OrderSide, Position
 from app.signals import Signal, SignalSide
@@ -7,7 +8,7 @@ from app.signals import Signal, SignalSide
 
 def test_repository_persists_signals_and_orders(tmp_path):
     repository = TradingRepository(tmp_path / "trading.sqlite3")
-    repository.save_signal(Signal("BTCUSDT", SignalSide.HOLD, 0.0, datetime.now(timezone.utc)))
+    repository.save_signal(Signal("BTCUSDT", SignalSide.HOLD, 0.0, datetime.now(UTC)))
     repository.save_order(OrderResult("order-1", "BTCUSDT", "FILLED", Decimal("1"), Decimal("100")))
     repository.save_trade({
         "trade_id": "trade-1", "symbol": "BTCUSDT", "side": "BUY", "quantity": "1",

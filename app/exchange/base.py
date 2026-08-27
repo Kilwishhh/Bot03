@@ -1,8 +1,7 @@
 """Exchange adapter contract."""
 
 from abc import ABC, abstractmethod
-from datetime import datetime
-from decimal import Decimal
+
 from .models import Balance, Candle, OrderRequest, OrderResult, Position, Ticker
 
 

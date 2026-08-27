@@ -1,20 +1,40 @@
-MK Trader Mobile (Flutter client) - scaffold
+# MK Trader Mobile (Flutter client)
 
-This folder contains a minimal Flutter client scaffold that connects to the MK TRADER Python backend read-only endpoints.
+A Flutter client for the MK TRADER backend. Targets the same read-only API endpoints as the web mobile dashboard, and offers admin controls (DEX preview/approve/place, Binance Square toggle/flush, audit log) when an admin token is configured in Settings.
 
-How to use (after Flutter SDK and Android toolchain are installed):
+## Screens
 
-1. Open a terminal in this folder:
-   cd "C:\Users\AMD\MK TRADER\mobile\flutter_app"
+| Screen | Endpoint data |
+|--------|--------------|
+| Home | Status, metrics, signals |
+| Orders | Recent orders |
+| Positions | Open positions |
+| Balances | Account balances |
+| DEX | Preview → Approve → Place (admin token required) |
+| Settings | Backend URL, theme, admin token |
 
-2. Get dependencies:
-   flutter pub get
+## Setup
 
-3. Run on an attached device or emulator:
-   flutter run
+```bash
+cd "C:\Users\AMD\MK TRADER\mobile\flutter_app"
+flutter pub get
+flutter run
+```
 
-4. The app expects the backend at http://127.0.0.1:8000 by default. If the backend runs on a different host/port, change the URL in lib/main.dart (backendBase).
+The app defaults to `http://127.0.0.1:8000`. Configure a different backend URL and paste an admin token in the Settings screen to unlock admin endpoints.
 
-Notes:
-- This is a scaffold only. Building an APK requires a configured Android SDK and emulator/device.
-- The app is intentionally read-only (no trading controls) to keep safety and testing simple.
+## API coverage
+
+All read endpoints are wired (`/health`, `/status`, `/summary`, `/signals`, `/orders`, `/positions`, `/balances`, `/trades`, `/metrics`, `/events`, `/errors`, `/admin/data`). Admin write endpoints (`/admin/dex/*`, `/admin/square/*`, `/admin/audit/tail`) are available in `ApiService` but require the admin token to be set via `setAdminToken`.
+
+## Security notes
+
+- Admin token is stored in plain `SharedPreferences`. Use `flutter_secure_storage` before shipping a production APK.
+- The DEX and Square admin endpoints are intentionally gated behind the admin token — the app never exposes them without auth.
+
+## Building an APK
+
+```bash
+flutter build apk --release
+# output: build/app/outputs/flutter-apk/app-release.apk
+```

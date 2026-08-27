@@ -1,14 +1,15 @@
 """Run a small local backtest demonstration without network access."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+
 from app.backtesting import BacktestingEngine
 from app.exchange.models import Candle
 from app.strategy import IndicatorStrategy
 
 
 def main() -> None:
-    start = datetime.now(timezone.utc)
+    start = datetime.now(UTC)
     prices = [100, 101, 102, 103, 104, 105, 104, 103, 102, 101, 100, 101, 102]
     candles = [Candle(start + timedelta(minutes=i), Decimal(price), Decimal(price), Decimal(price), Decimal(price), Decimal("1"), start + timedelta(minutes=i + 1)) for i, price in enumerate(prices)]
     result = BacktestingEngine().run(IndicatorStrategy(3, 5, 3, 5, 3), "BTCUSDT", candles)

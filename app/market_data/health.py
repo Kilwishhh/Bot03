@@ -1,6 +1,7 @@
 """Market-data freshness checks used before strategy execution."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 from app.exchange.models import Candle
 
 
@@ -11,10 +12,10 @@ class MarketDataHealth:
     def is_fresh(self, candles: list[Candle], now: datetime | None = None) -> bool:
         if not candles:
             return False
-        current_time = now or datetime.now(timezone.utc)
+        current_time = now or datetime.now(UTC)
         latest = candles[-1].close_time
         if latest.tzinfo is None:
-            latest = latest.replace(tzinfo=timezone.utc)
+            latest = latest.replace(tzinfo=UTC)
         return current_time - latest <= self.max_age
 
     def has_valid_sequence(self, candles: list[Candle]) -> bool:

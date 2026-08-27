@@ -1,5 +1,7 @@
-import pytest
 from decimal import Decimal
+
+import pytest
+
 from app.exchange.hyperliquid import HyperliquidAdapter
 from app.exchange.models import OrderRequest, OrderSide, OrderType
 

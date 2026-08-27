@@ -108,7 +108,7 @@ def main() -> None:
         return
 
     cols = st.columns(4)
-    for col, table in zip(cols, ("signals", "orders", "trades", "daily_pnl")):
+    for col, table in zip(cols, ("signals", "orders", "trades", "daily_pnl"), strict=False):
         col.metric(table.replace("_", " ").title(), counts.get(table, 0))
 
     st.caption(

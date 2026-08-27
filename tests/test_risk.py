@@ -1,5 +1,7 @@
 from decimal import Decimal
+
 import pytest
+
 from app.risk import PositionSizer, RiskManager, StopLossCalculator, TakeProfitCalculator
 
 

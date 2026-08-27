@@ -3,7 +3,6 @@
 import logging
 import re
 
-
 _SECRET_PATTERN = re.compile(r"(?i)(api[_-]?key|api[_-]?secret|bot[_-]?token|private[_-]?key|seed[_-]?phrase|project[_-]?id)(\s*[=:]\s*)[^\s,;]+")
 
 

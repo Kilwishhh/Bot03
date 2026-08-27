@@ -1,10 +1,10 @@
 """Scan all available Binance Futures symbols through a market-data provider."""
 
 import logging
+
 from app.market_data.base import MarketDataProvider
 from app.signals import SignalEngine
 from app.signals.models import Signal, SignalSide
-
 
 logger = logging.getLogger(__name__)
 

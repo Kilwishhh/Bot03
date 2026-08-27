@@ -1,6 +1,6 @@
 """Binance-compatible quantity and price step normalization."""
 
-from decimal import Decimal, ROUND_DOWN
+from decimal import ROUND_DOWN, Decimal
 
 
 def normalize(value: Decimal, step: Decimal) -> Decimal:

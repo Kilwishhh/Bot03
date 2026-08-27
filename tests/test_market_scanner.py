@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+
 from app.exchange.models import Candle
 from app.exchange.paper import PaperTradingAdapter
 from app.market_data import AdapterMarketDataProvider, FuturesSignalScanner
@@ -12,7 +13,7 @@ class ScanPaperAdapter(PaperTradingAdapter):
         return ["BTCUSDT", "ETHUSDT"]
 
     def get_candles(self, symbol, interval, limit=200):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return [Candle(now - timedelta(minutes=10 - i), Decimal(100 + i), Decimal(100 + i), Decimal(100 + i), Decimal(100 + i), Decimal("1"), now - timedelta(minutes=9 - i)) for i in range(11)]
 
 

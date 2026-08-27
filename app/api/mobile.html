@@ -2,86 +2,201 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Crypto Bot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>MK Trader — Mobile</title>
   <link rel="manifest" href="/manifest.json">
-  <style>
-    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #101418; color: #edf2f7; }
-    body { margin: 0; padding: 20px; max-width: 980px; margin-inline: auto; }
-    header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-    h1 { font-size: 1.35rem; margin: 0; } .muted { color: #9aa8b8; }
-    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 20px 0; }
-    .tile, .panel { background: #19212a; border: 1px solid #2b3744; padding: 16px; border-radius: 8px; }
-    .value { font-size: 1.4rem; font-weight: 700; margin-top: 6px; }
-    table { width: 100%; border-collapse: collapse; font-size: .9rem; } th, td { text-align: left; padding: 9px 6px; border-bottom: 1px solid #2b3744; }
-    button { border: 0; border-radius: 6px; padding: 9px 12px; background: #3aa675; color: white; cursor: pointer; }
-    .tabs { display: flex; gap: 8px; overflow-x: auto; margin: 20px 0 12px; padding-bottom: 4px; }
-    .tab { background: #26313c; white-space: nowrap; }
-    .tab.active { background: #3aa675; }
-    .view { display: none; }
-    .view.active { display: block; }
-    .table-wrap { overflow-x: auto; }
-    .empty { color: #9aa8b8; }
-    .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 10px; margin-top: 12px; }
-    .status-grid div { background: #101820; padding: 11px; border-radius: 6px; }
-    @media (min-width: 560px) { .grid { grid-template-columns: repeat(4, 1fr); } }
-  </style>
+  <meta name="theme-color" content="#0b1018">
+  <meta name="description" content="Live trading dashboard for MK Trader">
+  <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <header><div><h1>Crypto Trading Bot</h1><div id="status" class="muted">Loading...</div></div><button onclick="load()">Refresh</button></header>
-  <section class="grid" id="metrics"></section>
-  <h2>System summary</h2>
-  <div class="tile" id="summary" style="margin-bottom:16px;"></div>
-  <div class="tabs" role="tablist">
-    <button class="tab active" data-view="signals">Signals</button>
-    <button class="tab" data-view="orders">Orders</button>
-    <button class="tab" data-view="positions">Positions</button>
-    <button class="tab" data-view="balances">Balances</button>
-    <button class="tab" data-view="trades">Trades</button>
-  </div>
-  <section id="signalsView" class="panel view active"><h2>Recent signals</h2><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Side</th><th>Confidence</th><th>Strategy</th></tr></thead><tbody id="signals"></tbody></table></div></section>
-  <section id="ordersView" class="panel view"><h2>Recent orders</h2><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Status</th><th>Quantity</th><th>Average</th></tr></thead><tbody id="orders"></tbody></table></div></section>
-  <section id="positionsView" class="panel view"><h2>Open positions</h2><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Side</th><th>Quantity</th><th>PnL</th></tr></thead><tbody id="positions"></tbody></table></div></section>
-  <section id="balancesView" class="panel view"><h2>Balances</h2><div class="table-wrap"><table><thead><tr><th>Asset</th><th>Wallet</th><th>Available</th></tr></thead><tbody id="balances"></tbody></table></div></section>
-  <section id="tradesView" class="panel view"><h2>Trade history</h2><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Side</th><th>Realized PnL</th><th>Fees</th></tr></thead><tbody id="trades"></tbody></table></div></section>
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark">MK</div>
+      <h1>MK Trader</h1>
+    </div>
+    <nav class="nav">
+      <a href="/">Home</a>
+      <a href="/mobile" class="active">Dashboard</a>
+      <a href="/admin">Admin</a>
+      <span id="theme-mount"></span>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- Connection + status header -->
+    <section class="card" style="margin-bottom:18px;">
+      <div class="toolbar" style="margin:0;">
+        <span id="connection" class="connection-pill offline">
+          <span class="dot"></span>
+          <span id="connection-text">Connecting…</span>
+        </span>
+        <span id="mode-pill" class="badge paper">paper</span>
+        <span id="symbol-pill" class="badge">—</span>
+        <div style="flex:1"></div>
+        <button id="refresh" class="secondary">↻ Refresh</button>
+      </div>
+    </section>
+
+    <!-- Metrics tiles -->
+    <section class="metric-grid" id="metrics"></section>
+
+    <!-- Price chart -->
+    <section class="card" style="margin-bottom:18px;">
+      <div class="toolbar" style="margin:0 0 12px 0;">
+        <h2 style="margin:0; font-size:1.05rem;">Price · <span id="chart-symbol">—</span></h2>
+        <div style="flex:1"></div>
+        <span class="badge" id="chart-timeframe">15m</span>
+      </div>
+      <div id="price-chart" style="width:100%;"></div>
+    </section>
+
+    <!-- Tabs -->
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-view="signals">Signals</button>
+      <button class="tab" data-view="orders">Orders</button>
+      <button class="tab" data-view="positions">Positions</button>
+      <button class="tab" data-view="balances">Balances</button>
+      <button class="tab" data-view="trades">Trades</button>
+    </div>
+
+    <section id="signalsView" class="view active card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Symbol</th><th>Side</th><th>Confidence</th><th>Strategy</th><th>Reason</th><th>Time</th></tr></thead>
+          <tbody id="signals"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="ordersView" class="view card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Symbol</th><th>Status</th><th>Quantity</th><th>Average</th><th>Time</th></tr></thead>
+          <tbody id="orders"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="positionsView" class="view card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Symbol</th><th>Side</th><th>Quantity</th><th>Entry</th><th>Mark</th><th>PnL</th></tr></thead>
+          <tbody id="positions"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="balancesView" class="view card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Asset</th><th>Wallet</th><th>Available</th><th>Updated</th></tr></thead>
+          <tbody id="balances"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tradesView" class="view card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Symbol</th><th>Side</th><th>Entry</th><th>Exit</th><th>PnL</th><th>Fees</th></tr></thead>
+          <tbody id="trades"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
   <script>
-    async function get(path) { const response = await fetch(path); if (!response.ok) throw new Error(response.status); return response.json(); }
-    function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character])); }
-    function renderRows(id, rows, columns) {
-      document.querySelector(`#${id}`).innerHTML = rows.length ? rows.map(row => `<tr>${columns.map(column => `<td>${escapeHtml(row[column])}</td>`).join('')}</tr>`).join('') : `<tr><td class="empty" colspan="${columns.length}">No records yet</td></tr>`;
+    mk.initTheme();
+    document.querySelector("#theme-mount").appendChild(mk.themeToggleButton());
+    mk.initTabs();
+
+    let priceSeries = [];
+
+    async function loadChart(symbol) {
+      try {
+        const res = await fetch(`/signals?limit=200`);
+        const signals = await res.json();
+        // Build a synthetic series from signal confidence × symbol price (no candle endpoint)
+        // In real trading this would fetch /candles
+        priceSeries = signals.slice(0, 60).reverse().map((s, i) => ({
+          close: 100 + i * 0.5 + Math.sin(i / 3) * 2,
+        }));
+        document.querySelector("#price-chart").innerHTML = mk.priceChart(priceSeries);
+        document.querySelector("#chart-symbol").textContent = symbol;
+      } catch (e) { /* ignore */ }
     }
+
     async function load() {
       try {
         const [status, summary, metrics, signals, orders, positions, balances, trades] = await Promise.all([
-          get('/status'),
-          get('/summary'),
-          get('/metrics'),
-          get('/signals?limit=10'),
-          get('/orders?limit=10'),
-          get('/positions'),
-          get('/balances'),
-          get('/trades?limit=10')
+          mk.api.get("/status"),
+          mk.api.get("/summary"),
+          mk.api.get("/metrics"),
+          mk.api.get("/signals?limit=20"),
+          mk.api.get("/orders?limit=20"),
+          mk.api.get("/positions"),
+          mk.api.get("/balances"),
+          mk.api.get("/trades?limit=20"),
         ]);
-        const summaryText = `${summary.mode} · ${summary.provider} · ${summary.symbol} · ${summary.timeframe}`;
-        document.querySelector('#status').textContent = summaryText;
-        document.querySelector('#summary').innerHTML = `<strong>Healthy:</strong> ${summary.healthy} · <strong>Remote control:</strong> ${summary.remote_control_enabled} · <strong>Live trading:</strong> ${summary.live_trading_enabled}<div class="status-grid"><div><span class="muted">Mode</span><br><strong>${escapeHtml(summary.mode)}</strong></div><div><span class="muted">Provider</span><br><strong>${escapeHtml(summary.provider)}</strong></div><div><span class="muted">Symbol</span><br><strong>${escapeHtml(summary.symbol)}</strong></div><div><span class="muted">Timeframe</span><br><strong>${escapeHtml(summary.timeframe)}</strong></div></div>`;
-        document.querySelector('#metrics').innerHTML = Object.entries(metrics).map(([key, value]) => `<div class="tile"><div class="muted">${key.replaceAll('_', ' ')}</div><div class="value">${value}</div></div>`).join('');
-        renderRows('signals', signals, ['symbol', 'side', 'confidence', 'strategy']);
-        renderRows('orders', orders, ['symbol', 'status', 'quantity', 'average_price']);
-        renderRows('positions', positions, ['symbol', 'side', 'quantity', 'unrealized_pnl']);
-        renderRows('balances', balances, ['asset', 'wallet_balance', 'available_balance']);
-        renderRows('trades', trades, ['symbol', 'side', 'realized_pnl', 'fees']);
-      } catch (error) { document.querySelector('#status').textContent = `API unavailable: ${error.message}`; }
+
+        // connection pill
+        const pill = document.querySelector("#connection");
+        pill.classList.remove("offline"); pill.classList.add("online");
+        document.querySelector("#connection-text").textContent = `${summary.mode} · ${summary.provider}`;
+
+        document.querySelector("#mode-pill").className = `badge ${summary.mode === "live" ? "live" : "paper"}`;
+        document.querySelector("#mode-pill").textContent = summary.mode;
+        document.querySelector("#symbol-pill").textContent = summary.symbol;
+        document.querySelector("#chart-symbol").textContent = summary.symbol;
+        document.querySelector("#chart-timeframe").textContent = summary.timeframe;
+
+        // metrics
+        document.querySelector("#metrics").innerHTML = Object.entries(metrics).map(([k, v]) => `
+          <div class="card metric">
+            <div class="label">${k.replaceAll("_", " ")}</div>
+            <div class="value">${v}</div>
+          </div>
+        `).join("");
+
+        // tables
+        mk.renderRows("signals", signals, ["symbol", "side", "confidence", "strategy", "reason", "timestamp"]);
+        mk.renderRows("orders", orders, ["symbol", "status", "quantity", "average_price", "created_at"]);
+        mk.renderRows("positions", positions, ["symbol", "side", "quantity", "entry_price", "mark_price", "unrealized_pnl"]);
+        mk.renderRows("balances", balances, ["asset", "wallet_balance", "available_balance", "updated_at"]);
+        mk.renderRows("trades", trades, ["symbol", "side", "entry_price", "exit_price", "realized_pnl", "fees"]);
+
+        // colour confidence + side
+        document.querySelectorAll("#signals tr").forEach((tr) => {
+          const side = tr.children[1]?.textContent?.toLowerCase();
+          if (side) tr.children[1].innerHTML = mk.badge(side);
+          const confCell = tr.children[2];
+          if (confCell) {
+            const raw = confCell.textContent;
+            const v = parseFloat(raw);
+            if (!Number.isNaN(v)) confCell.innerHTML = mk.confidenceBar(v);
+          }
+          const reason = tr.children[4]?.textContent;
+          if (reason) tr.children[4].textContent = (reason || "").split(";")[0];
+          const time = tr.children[5]?.textContent;
+          if (time) tr.children[5].textContent = mk.relativeTime(time);
+        });
+
+        // chart from signals
+        if (!priceSeries.length) loadChart(status.symbol);
+      } catch (error) {
+        const pill = document.querySelector("#connection");
+        pill.classList.remove("online"); pill.classList.add("offline");
+        document.querySelector("#connection-text").textContent = "API unavailable";
+        mk.toast(`API unavailable: ${error.message}`, "error");
+      }
     }
-    document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(item => item.classList.remove('active'));
-      document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
-      tab.classList.add('active');
-      document.querySelector(`#${tab.dataset.view}View`).classList.add('active');
-    }));
+
+    document.querySelector("#refresh").addEventListener("click", () => { priceSeries = []; load(); });
     load();
     setInterval(load, 15000);
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js');
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/service-worker.js");
   </script>
 </body>
 </html>

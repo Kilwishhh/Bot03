@@ -1,8 +1,10 @@
 """Position lifecycle facade independent of the concrete exchange."""
 
 from decimal import Decimal
+
 from app.exchange.base import ExchangeAdapter
 from app.exchange.models import OrderRequest, OrderResult, Position
+
 from .order_validator import validate_order
 
 

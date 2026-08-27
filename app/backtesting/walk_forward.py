@@ -1,6 +1,7 @@
 """Chronological train/validation/test splitting for out-of-sample work."""
 
 from dataclasses import dataclass
+
 from app.exchange.models import Candle
 
 

@@ -41,8 +41,12 @@ def test_mobile_api_exposes_summary():
 def test_admin_dashboard_is_available():
     response = TestClient(app).get("/admin")
     assert response.status_code == 200
-    assert "Admin Dashboard" in response.text
+    assert "MK Trader" in response.text
+    assert "Admin" in response.text
     assert "Start bot" in response.text
+    # new design: shared CSS link and JS bundle present
+    assert "/static/styles.css" in response.text
+    assert "/static/app.js" in response.text
 
 
 def test_admin_status_is_available():
@@ -72,7 +76,11 @@ def test_remote_control_is_disabled_by_default():
 def test_admin_dashboard_exposes_control_token_and_feedback():
     response = TestClient(app).get("/admin")
     assert "controlToken" in response.text
-    assert "actionStatus" in response.text
+    assert "action-status" in response.text
+    # DEX order preview controls are exposed in the admin UI
+    assert "dex-preview" in response.text
+    assert "dex-approve" in response.text
+    assert "dex-place" in response.text
 
 
 def test_admin_data_exposes_operational_views_and_safety_config():
@@ -118,9 +126,34 @@ def test_mobile_api_allows_read_only_cors():
 def test_mobile_dashboard_page_is_available():
     response = TestClient(app).get("/mobile")
     assert response.status_code == 200
-    assert "Crypto Trading Bot" in response.text
-    assert "Refresh" in response.text
+    assert "MK Trader" in response.text
+    assert "↻ Refresh" in response.text or "Refresh" in response.text
     assert "setInterval" in response.text
+    # new design includes a price chart container and the shared asset bundle
+    assert "price-chart" in response.text
+    assert "/static/styles.css" in response.text
+    assert "/static/app.js" in response.text
+
+
+def test_landing_page_is_available():
+    response = TestClient(app).get("/")
+    assert response.status_code == 200
+    assert "MK Trader" in response.text
+    assert "Trade safely" in response.text
+    assert "Paper" in response.text
+    assert "Testnet" in response.text
+    assert "Live" in response.text
+    # includes a link to the mobile dashboard
+    assert "/mobile" in response.text
+
+
+def test_static_assets_are_served():
+    css = TestClient(app).get("/static/styles.css")
+    js = TestClient(app).get("/static/app.js")
+    assert css.status_code == 200
+    assert js.status_code == 200
+    assert ":root" in css.text
+    assert "window.mk" in js.text
 
 
 def test_mobile_dashboard_exposes_operational_tabs():

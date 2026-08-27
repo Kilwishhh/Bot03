@@ -1,5 +1,7 @@
 from decimal import Decimal
+
 import pytest
+
 from app.exchange.models import OrderRequest, OrderSide, OrderType
 from app.exchange.paper import PaperTradingAdapter
 from app.execution import OrderValidationError, PositionManager, validate_order

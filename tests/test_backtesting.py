@@ -1,12 +1,13 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+
 from app.backtesting import BacktestingEngine
 from app.exchange.models import Candle
 from app.strategy import IndicatorStrategy
 
 
 def test_backtest_uses_only_candles_available_at_each_step():
-    start = datetime.now(timezone.utc)
+    start = datetime.now(UTC)
     candles = [Candle(start + timedelta(minutes=i), Decimal(100 + i), Decimal(100 + i), Decimal(100 + i), Decimal(100 + i), Decimal("1"), start + timedelta(minutes=i + 1)) for i in range(12)]
     result = BacktestingEngine().run(IndicatorStrategy(3, 5, 3, 5, 3), "BTCUSDT", candles)
     assert result.starting_balance == Decimal("1000")
