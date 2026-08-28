@@ -66,3 +66,9 @@ Thumbs.db
 *.log
 *.crdownload
 *.tmp
+
+# Node / frontend
+node_modules/
+dashboard/node_modules/
+dashboard/dist/
+dashboard/.vite/
