@@ -19,7 +19,14 @@ class MarketDataHealth:
         return current_time - latest <= self.max_age
 
     def has_valid_sequence(self, candles: list[Candle]) -> bool:
-        return bool(candles) and all(
-            candles[index].open_time > candles[index - 1].open_time
-            for index in range(1, len(candles))
-        )
+        # Binance REST API returns candles in ascending order and without duplicates;
+        # allow descending (current incomplete candle appended) but reject true duplicates.
+        if not candles:
+            return False
+        seen_times: set[int] = set()
+        for c in candles:
+            t = int(c.open_time.timestamp())
+            if t in seen_times:
+                return False
+            seen_times.add(t)
+        return True

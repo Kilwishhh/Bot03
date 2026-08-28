@@ -119,6 +119,8 @@ def control_start(
         ),
         repository,
         publisher,
+        leverage=settings.max_leverage,
+        position_notional=Decimal(str(settings.paper_position_notional)),
     )
 
     runner = BotRunner(

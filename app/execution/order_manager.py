@@ -23,7 +23,7 @@ class OrderManager:
         self._reconciler = reconciler
         self._dex_gate = DexOrderGate(exchange)
 
-    def process_signal(self, signal: Signal, daily_pnl: Decimal = Decimal("0"), open_positions: int = 0, leverage: int = 1):
+    def process_signal(self, signal: Signal, daily_pnl: Decimal = Decimal("0"), open_positions: int = 0, leverage: int = 1, position_notional: Decimal | None = None):
         if signal.side is SignalSide.HOLD:
             return None
         if self._reconciler and self._reconciler.trading_blocked:
@@ -34,8 +34,13 @@ class OrderManager:
         if not decision.approved:
             return None
         ticker = self._exchange.get_ticker(signal.symbol)
-        stop = StopLossCalculator().percentage(ticker.price, signal.side.value, ticker.price * Decimal("0.02"))
-        quantity = self._sizer.calculate(self._exchange.get_balance().available_balance, ticker.price, stop)
+        if position_notional is not None and position_notional > 0:
+            # Use a fixed notional dollar amount (e.g. $10) regardless of stop distance.
+            raw_quantity = (position_notional * Decimal(str(leverage))) / ticker.price
+            quantity = self._sizer._quantize(raw_quantity)
+        else:
+            stop = StopLossCalculator().percentage(ticker.price, signal.side.value, ticker.price * Decimal("0.02"))
+            quantity = self._sizer.calculate(self._exchange.get_balance().available_balance, ticker.price, stop)
         if quantity <= 0:
             return None
         side = OrderSide.BUY if signal.side is SignalSide.BUY else OrderSide.SELL

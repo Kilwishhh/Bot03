@@ -1,5 +1,7 @@
 """Create the selected adapter while preserving trading safety gates."""
 
+from decimal import Decimal
+
 from app.config import ExchangeProvider, Settings, TradingMode
 
 from .base import ExchangeAdapter
@@ -9,7 +11,9 @@ from .paper import PaperTradingAdapter
 
 def create_exchange(settings: Settings) -> ExchangeAdapter:
     if settings.trading_mode in (TradingMode.PAPER, TradingMode.BACKTEST):
-        return PaperTradingAdapter()
+        return PaperTradingAdapter(
+            starting_balance=Decimal(str(settings.paper_starting_balance)),
+        )
     if settings.exchange_provider is ExchangeProvider.BINANCE:
         if settings.trading_mode is TradingMode.TESTNET:
             return BinanceFuturesAdapter(settings.binance_api_key, settings.binance_api_secret, testnet=True)

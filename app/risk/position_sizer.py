@@ -16,3 +16,7 @@ class PositionSizer:
             raise ValueError("balance, entry price, and stop distance must be positive")
         raw_quantity = balance * self.risk_per_trade / distance
         return (raw_quantity / self.step_size).to_integral_value(rounding=ROUND_DOWN) * self.step_size
+
+    def _quantize(self, raw_quantity: Decimal) -> Decimal:
+        """Quantize to step size without risk-based sizing (used by fixed-notional mode)."""
+        return (raw_quantity / self.step_size).to_integral_value(rounding=ROUND_DOWN) * self.step_size

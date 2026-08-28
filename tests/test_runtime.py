@@ -24,7 +24,7 @@ def test_trading_cycle_persists_signal_and_order(tmp_path):
     cycle = TradingCycle(
         AdapterMarketDataProvider(exchange),
         SignalEngine(IndicatorStrategy(3, 5, 3, 5, 3)),
-        OrderManager(exchange, RiskManager(Decimal("30"), 3, Decimal("0.7"), 5), PositionSizer(Decimal("0.01"))),
+        OrderManager(exchange, RiskManager(Decimal("30"), 3, Decimal("0.0"), 5), PositionSizer(Decimal("0.01"))),
         repository,
     )
     signal, result = cycle.run_once("BTCUSDT", "15m")

@@ -32,6 +32,8 @@ htmlcov/
 *.sqlite
 paper_demo.sqlite3
 trading.db
+trading.db-shm
+trading.db-wal
 
 # Flutter / Dart
 .flutter/

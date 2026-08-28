@@ -14,12 +14,23 @@ logger = logging.getLogger(__name__)
 
 
 class TradingCycle:
-    def __init__(self, market_data: MarketDataProvider, signals: SignalEngine, orders: OrderManager, repository: TradingRepository, publisher: SignalPublisher | None = None) -> None:
+    def __init__(
+        self,
+        market_data: MarketDataProvider,
+        signals: SignalEngine,
+        orders: OrderManager,
+        repository: TradingRepository,
+        publisher: SignalPublisher | None = None,
+        leverage: int = 1,
+        position_notional: Decimal | None = None,
+    ) -> None:
         self._market_data = market_data
         self._signals = signals
         self._orders = orders
         self._repository = repository
         self._publisher = publisher
+        self._leverage = leverage
+        self._position_notional = position_notional
 
     def run_once(self, symbol: str, timeframe: str, limit: int = 200):
         candles = self._market_data.candles(symbol, timeframe, limit)
@@ -31,7 +42,13 @@ class TradingCycle:
             except Exception as error:
                 logger.warning("signal publication failed: %s", error)
                 self._repository.record_error("notification", str(error))
-        result = self._orders.process_signal(signal, daily_pnl=Decimal("0"), open_positions=0, leverage=1)
+        result = self._orders.process_signal(
+            signal,
+            daily_pnl=Decimal("0"),
+            open_positions=0,
+            leverage=self._leverage,
+            position_notional=self._position_notional,
+        )
         if result is not None:
             self._repository.save_order(result)
             self._repository.save_balance(self._orders.balance())

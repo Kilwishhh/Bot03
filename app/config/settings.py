@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     max_exposure: float = Field(default=1000, gt=0)
     max_consecutive_losses: int = Field(default=3, ge=1)
     min_signal_confidence: float = Field(default=0.70, ge=0, le=1)
+    # Paper-trading controls
+    paper_starting_balance: float = Field(default=10000.0, gt=0)
+    paper_position_notional: float = Field(default=10.0, gt=0)
     strategy: str = "indicator"
     ema_fast: int = Field(default=20, ge=2)
     ema_slow: int = Field(default=50, ge=3)

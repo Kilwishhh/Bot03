@@ -6,7 +6,10 @@
 
   const api = {
     async get(path) {
-      const res = await fetch(path, { credentials: "omit" });
+      const token = localStorage.getItem("admin_api_token");
+      const headers = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(path, { credentials: "omit", headers });
       if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
       return res.json();
     },

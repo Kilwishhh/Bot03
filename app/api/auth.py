@@ -15,7 +15,10 @@ def _check_bearer(authorization: str | None, expected_token: str) -> None:
         raise HTTPException(status_code=401, detail="invalid token")
 
 
-def require_control_token(authorization: str | None = Header(default=None, alias="Authorization")) -> None:
+def require_control_token(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_control_token: str | None = Header(default=None, alias="X-Control-Token"),
+) -> None:
     """Gate remote control endpoints. Only enforced when remote control is enabled."""
     settings = Settings()
     if not settings.enable_remote_control:
@@ -23,10 +26,15 @@ def require_control_token(authorization: str | None = Header(default=None, alias
     token = settings.control_api_token
     if not token:
         raise HTTPException(status_code=403, detail="remote control token not configured")
-    _check_bearer(authorization, token)
+    # Accept either Authorization: Bearer <token> or X-Control-Token: <token>
+    effective = authorization if x_control_token is None else f"Bearer {x_control_token}"
+    _check_bearer(effective, token)
 
 
-def require_admin_token(authorization: str | None = Header(default=None, alias="Authorization")) -> None:
+def require_admin_token(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
+) -> None:
     """Gate admin endpoints. If no admin token is configured, all admin requests are rejected."""
     token = Settings().admin_api_token
     if not token:
@@ -34,4 +42,6 @@ def require_admin_token(authorization: str | None = Header(default=None, alias="
             status_code=403,
             detail="admin endpoints disabled; set ADMIN_API_TOKEN in your environment to enable",
         )
-    _check_bearer(authorization, token)
+    # Accept either Authorization: Bearer <token> or X-Admin-Token: <token>
+    effective = authorization if x_admin_token is None else f"Bearer {x_admin_token}"
+    _check_bearer(effective, token)
