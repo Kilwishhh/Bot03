@@ -96,12 +96,15 @@ class _HomeScreenState extends State<HomeScreen> {
             // Status row
             Row(
               children: [
-                ConnectionPill(online: _online, text: _online ? 'Connected' : 'Offline'),
+                ConnectionPill(
+                    online: _online, text: _online ? 'Connected' : 'Offline'),
                 const SizedBox(width: 8),
                 if (_summary['mode'] != null)
                   SideBadge(
                     label: '${_summary['mode']}'.toUpperCase(),
-                    color: _summary['mode'] == 'live' ? const Color(0xFFEF4444) : null,
+                    color: _summary['mode'] == 'live'
+                        ? const Color(0xFFEF4444)
+                        : null,
                   ),
                 const Spacer(),
                 if (_summary['symbol'] != null)
@@ -124,13 +127,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Text(
                           'Recent signal-derived series',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const Spacer(),
                         if (_chartValues.length >= 2)
                           Text(
-                            '${_chartValues.last.toStringAsFixed(2)}',
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                            _chartValues.last.toStringAsFixed(2),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800, fontSize: 18),
                           ),
                       ],
                     ),
@@ -151,7 +158,10 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
               child: Text(
                 'Recent signals',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
             if (_signals.isEmpty)
@@ -167,7 +177,10 @@ class _HomeScreenState extends State<HomeScreen> {
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: Text('Last error: $_error', style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12)),
+                child: Text('Last error: $_error',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 12)),
               ),
           ],
         ),
@@ -193,7 +206,9 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Row(
               children: [
-                Text(symbol, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                Text(symbol,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 16)),
                 const SizedBox(width: 8),
                 SideBadge(label: side),
                 const Spacer(),
@@ -201,9 +216,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            Text(firstReason, style: TextStyle(color: Theme.of(context).hintColor)),
+            Text(firstReason,
+                style: TextStyle(color: Theme.of(context).hintColor)),
             const SizedBox(height: 4),
-            Text('$strategy · $ts', style: TextStyle(color: Theme.of(context).hintColor, fontSize: 11)),
+            Text('$strategy · $ts',
+                style: TextStyle(
+                    color: Theme.of(context).hintColor, fontSize: 11)),
           ],
         ),
       ),
@@ -242,7 +260,9 @@ class _MetricsGrid extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text('${e.value}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                Text('${e.value}',
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.w800)),
               ],
             ),
           ),
@@ -253,5 +273,6 @@ class _MetricsGrid extends StatelessWidget {
 }
 
 extension _Padded on Widget {
-  Widget padded() => Padding(padding: const EdgeInsets.only(bottom: 8), child: this);
+  Widget padded() =>
+      Padding(padding: const EdgeInsets.only(bottom: 8), child: this);
 }

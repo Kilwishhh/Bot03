@@ -11,8 +11,8 @@ class HelpScreen extends StatelessWidget {
     final cardBorder = isDark ? Colors.white12 : Colors.black12;
     final codeBg = isDark ? const Color(0xFF2A2A3C) : const Color(0xFFF5F5F5);
     final primary = Theme.of(context).colorScheme.primary;
-    final green = const Color(0xFF4ADE80);
-    final red = const Color(0xFFF87171);
+    const green = Color(0xFF4ADE80);
+    const red = Color(0xFFF87171);
 
     Widget code(String text) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -21,7 +21,9 @@ class HelpScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: cardBorder),
           ),
-          child: Text(text, style: TextStyle(fontFamily: 'monospace', fontSize: 13, color: primary)),
+          child: Text(text,
+              style: TextStyle(
+                  fontFamily: 'monospace', fontSize: 13, color: primary)),
         );
 
     Widget step(int num, String title, Widget body) => Padding(
@@ -30,16 +32,25 @@ class HelpScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 28, height: 28,
-                decoration: BoxDecoration(color: primary, shape: BoxShape.circle),
-                child: Center(child: Text('$num', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14))),
+                width: 28,
+                height: 28,
+                decoration:
+                    BoxDecoration(color: primary, shape: BoxShape.circle),
+                child: Center(
+                    child: Text('$num',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14))),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                    Text(title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 15)),
                     const SizedBox(height: 8),
                     body,
                   ],
@@ -55,14 +66,18 @@ class HelpScreen extends StatelessWidget {
           decoration: BoxDecoration(
             color: (isError ? red : green).withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: (isError ? red : green).withValues(alpha: 0.3)),
+            border: Border.all(
+                color: (isError ? red : green).withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
               Icon(isError ? Icons.error_outline : Icons.check_circle_outline,
                   size: 18, color: isError ? red : green),
               const SizedBox(width: 8),
-              Expanded(child: Text(text, style: TextStyle(fontSize: 13, color: isError ? red : green))),
+              Expanded(
+                  child: Text(text,
+                      style: TextStyle(
+                          fontSize: 13, color: isError ? red : green))),
             ],
           ),
         );
@@ -77,7 +92,6 @@ class HelpScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-
           // ── Quick Status ──
           Container(
             padding: const EdgeInsets.all(16),
@@ -86,11 +100,11 @@ class HelpScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: cardBorder),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(Icons.info_outline, size: 20),
-                const SizedBox(width: 10),
-                const Expanded(
+                Icon(Icons.info_outline, size: 20),
+                SizedBox(width: 10),
+                Expanded(
                   child: Text('Setup takes ~2 minutes. Follow the steps below.',
                       style: TextStyle(fontSize: 14)),
                 ),
@@ -101,18 +115,36 @@ class HelpScreen extends StatelessWidget {
           const SizedBox(height: 28),
 
           // ── SECTION: How It Works ──
-          const Text('HOW IT WORKS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+          const Text('HOW IT WORKS',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2)),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: cardBorder)),
+            decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cardBorder)),
             child: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _FlowItem(n: '1', label: 'Run the API server on your laptop (this terminal)'),
-                _FlowItem(n: '2', label: 'Open the app and point it to your laptop\'s IP address'),
-                _FlowItem(n: '3', label: 'Enter the admin token shown in the terminal to unlock all tabs'),
-                _FlowItem(n: '4', label: 'Use Home, Orders, Positions, Balances, DEX — all powered by the server'),
+                _FlowItem(
+                    n: '1',
+                    label: 'Run the API server on your laptop (this terminal)'),
+                _FlowItem(
+                    n: '2',
+                    label:
+                        'Open the app and point it to your laptop\'s IP address'),
+                _FlowItem(
+                    n: '3',
+                    label:
+                        'Enter the admin token shown in the terminal to unlock all tabs'),
+                _FlowItem(
+                    n: '4',
+                    label:
+                        'Use Home, Orders, Positions, Balances, DEX — all powered by the server'),
               ],
             ),
           ),
@@ -120,88 +152,121 @@ class HelpScreen extends StatelessWidget {
           const SizedBox(height: 28),
 
           // ── SECTION: Server Setup ──
-          const Text('SERVER SETUP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+          const Text('SERVER SETUP',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2)),
           const SizedBox(height: 12),
 
-          step(1, 'Start the API server',
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Open a new terminal (or reuse this one) and run:'),
-                const SizedBox(height: 8),
-                code('cd C:\\Users\\AMD\\MK TRADER'),
-                const SizedBox(height: 4),
-                code('.venv\\Scripts\\uvicorn.exe app.api.server:app --host 0.0.0.0 --port 8000'),
-                const SizedBox(height: 8),
-                const Text('You should see:', style: TextStyle(fontSize: 13)),
-                const SizedBox(height: 4),
-                code('INFO: Uvicorn running on http://0.0.0.0:8000'),
-                const SizedBox(height: 4),
-                note('The server must stay running. Close the terminal = app stops working.'),
-              ],
-            )),
+          step(
+              1,
+              'Start the API server',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                      'Open a new terminal (or reuse this one) and run:'),
+                  const SizedBox(height: 8),
+                  code('cd C:\\Users\\AMD\\MK TRADER'),
+                  const SizedBox(height: 4),
+                  code(
+                      '.venv\\Scripts\\uvicorn.exe app.api.server:app --host 0.0.0.0 --port 8000'),
+                  const SizedBox(height: 8),
+                  const Text('You should see:', style: TextStyle(fontSize: 13)),
+                  const SizedBox(height: 4),
+                  code('INFO: Uvicorn running on http://0.0.0.0:8000'),
+                  const SizedBox(height: 4),
+                  note(
+                      'The server must stay running. Close the terminal = app stops working.'),
+                ],
+              )),
 
-          step(2, 'Allow through Windows Firewall',
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('When the server first starts, Windows may show a firewall popup.'),
-                SizedBox(height: 8),
-                Text('Click "Allow access" for both private and public networks.'),
-                SizedBox(height: 8),
-                Text('If you missed it, run the server as Administrator once, or add a rule manually:'),
-                SizedBox(height: 8),
-              ],
-            )),
+          step(
+              2,
+              'Allow through Windows Firewall',
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                      'When the server first starts, Windows may show a firewall popup.'),
+                  SizedBox(height: 8),
+                  Text(
+                      'Click "Allow access" for both private and public networks.'),
+                  SizedBox(height: 8),
+                  Text(
+                      'If you missed it, run the server as Administrator once, or add a rule manually:'),
+                  SizedBox(height: 8),
+                ],
+              )),
 
-          step(3, 'Find your laptop\'s IP address',
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Open a new PowerShell window and run:'),
-                const SizedBox(height: 8),
-                code('ipconfig'),
-                const SizedBox(height: 8),
-                const Text('Look for "IPv4 Address" under your active Wi-Fi adapter (e.g. 192.168.1.50).'),
-                const SizedBox(height: 4),
-                note('Do NOT use 127.0.0.1 — that\'s only for the same machine.'),
-              ],
-            )),
+          step(
+              3,
+              'Find your laptop\'s IP address',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Open a new PowerShell window and run:'),
+                  const SizedBox(height: 8),
+                  code('ipconfig'),
+                  const SizedBox(height: 8),
+                  const Text(
+                      'Look for "IPv4 Address" under your active Wi-Fi adapter (e.g. 192.168.1.50).'),
+                  const SizedBox(height: 4),
+                  note(
+                      'Do NOT use 127.0.0.1 — that\'s only for the same machine.'),
+                ],
+              )),
 
-          step(4, 'Configure the app',
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('In the app, go to the Settings tab (last tab at the bottom):'),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _BulletItem(label: 'Backend URL → change to http://YOUR_IP:8000'),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    _BulletItem(label: 'Admin API Token → paste the token from the terminal'),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text('Then tap "Save Settings" and pull down to refresh.'),
-              ],
-            )),
+          step(
+              4,
+              'Configure the app',
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                      'In the app, go to the Settings tab (last tab at the bottom):'),
+                  SizedBox(height: 8),
+                  const Row(
+                    children: const [
+                      _BulletItem(
+                          label: 'Backend URL → change to http://YOUR_IP:8000'),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  const Row(
+                    children: const [
+                      _BulletItem(
+                          label:
+                              'Admin API Token → paste the token from the terminal'),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  Text('Then tap "Save Settings" and pull down to refresh.'),
+                ],
+              )),
 
           const SizedBox(height: 28),
 
           // ── SECTION: Token ──
-          const Text('THE ADMIN TOKEN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+          const Text('THE ADMIN TOKEN',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2)),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: cardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: cardBorder)),
+            decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cardBorder)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('The admin token is set when starting the server. For this session:', style: TextStyle(fontSize: 14)),
+                const Text(
+                    'The admin token is set when starting the server. For this session:',
+                    style: TextStyle(fontSize: 14)),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -213,13 +278,17 @@ class HelpScreen extends StatelessWidget {
                       onPressed: () {
                         Clipboard.setData(const ClipboardData(text: 'demo123'));
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Token copied! Paste it in Settings.'), duration: Duration(seconds: 2)));
+                            const SnackBar(
+                                content:
+                                    Text('Token copied! Paste it in Settings.'),
+                                duration: Duration(seconds: 2)));
                       },
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                note('For production, set ADMIN_API_TOKEN=your_secret_token when starting the server.'),
+                note(
+                    'For production, set ADMIN_API_TOKEN=your_secret_token when starting the server.'),
               ],
             ),
           ),
@@ -227,37 +296,51 @@ class HelpScreen extends StatelessWidget {
           const SizedBox(height: 28),
 
           // ── SECTION: Common Problems ──
-          const Text('COMMON PROBLEMS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+          const Text('COMMON PROBLEMS',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2)),
           const SizedBox(height: 12),
 
           _FaqItem(
             q: '"API not available — remote control disabled"',
             a: 'The server is running but the URL in Settings is wrong. Make sure the URL in Settings is exactly http://YOUR_IP:8000 (e.g. http://192.168.1.50:8000).',
-            cardBg: cardBg, cardBorder: cardBorder, primary: primary,
+            cardBg: cardBg,
+            cardBorder: cardBorder,
+            primary: primary,
           ),
           const SizedBox(height: 8),
           _FaqItem(
             q: 'Admin tabs (DEX, audit log) are locked',
             a: 'Go to Settings → Admin API Token → paste "demo123" (or your server\'s token) → Save Settings.',
-            cardBg: cardBg, cardBorder: cardBorder, primary: primary,
+            cardBg: cardBg,
+            cardBorder: cardBorder,
+            primary: primary,
           ),
           const SizedBox(height: 8),
           _FaqItem(
             q: 'App loads but shows no data',
             a: 'Pull down to refresh. If still empty, the server may be in paper mode with no activity. Check the server terminal for errors.',
-            cardBg: cardBg, cardBorder: cardBorder, primary: primary,
+            cardBg: cardBg,
+            cardBorder: cardBorder,
+            primary: primary,
           ),
           const SizedBox(height: 8),
           _FaqItem(
             q: 'Cannot connect from phone to laptop',
             a: '1. Make sure both devices are on the same Wi-Fi.\n2. Check Windows Firewall allows Python.\n3. Try pinging your laptop IP from the phone browser first.',
-            cardBg: cardBg, cardBorder: cardBorder, primary: primary,
+            cardBg: cardBg,
+            cardBorder: cardBorder,
+            primary: primary,
           ),
           const SizedBox(height: 8),
           _FaqItem(
             q: 'Server crashes on startup',
             a: 'You may be missing Python packages. Run: .venv\\Scripts\\pip.exe install -e . in the MK TRADER folder.',
-            cardBg: cardBg, cardBorder: cardBorder, primary: primary,
+            cardBg: cardBg,
+            cardBorder: cardBorder,
+            primary: primary,
           ),
 
           const SizedBox(height: 32),
@@ -280,11 +363,21 @@ class _FlowItem extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 24, height: 24,
-            decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(6), border: Border.all(color: cardBorder)),
-            child: Center(child: Text(n, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.primary))),
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: cardBorder)),
+            child: Center(
+                child: Text(n,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.primary))),
           ),
           const SizedBox(width: 10),
           Expanded(child: Text(label, style: const TextStyle(fontSize: 14))),
@@ -315,7 +408,12 @@ class _FaqItem extends StatefulWidget {
   final Color cardBg;
   final Color cardBorder;
   final Color primary;
-  const _FaqItem({required this.q, required this.a, required this.cardBg, required this.cardBorder, required this.primary});
+  const _FaqItem(
+      {required this.q,
+      required this.a,
+      required this.cardBg,
+      required this.cardBorder,
+      required this.primary});
   @override
   State<_FaqItem> createState() => _FaqItemState();
 }
@@ -332,20 +430,27 @@ class _FaqItemState extends State<_FaqItem> {
         decoration: BoxDecoration(
           color: _open ? widget.primary.withValues(alpha: 0.08) : widget.cardBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _open ? widget.primary.withValues(alpha: 0.4) : widget.cardBorder),
+          border: Border.all(
+              color: _open
+                  ? widget.primary.withValues(alpha: 0.4)
+                  : widget.cardBorder),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Expanded(child: Text(widget.q, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14))),
+                Expanded(
+                    child: Text(widget.q,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w500, fontSize: 14))),
                 Icon(_open ? Icons.remove : Icons.add, size: 18),
               ],
             ),
             if (_open) ...[
               const SizedBox(height: 10),
-              Text(widget.a, style: TextStyle(fontSize: 13, color: Colors.grey[400])),
+              Text(widget.a,
+                  style: TextStyle(fontSize: 13, color: Colors.grey[400])),
             ],
           ],
         ),

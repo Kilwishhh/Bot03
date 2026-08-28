@@ -112,10 +112,9 @@ def test_ema_crossover_holds_without_a_fresh_cross():
 
 def test_ema_crossover_buy_on_upward_cross():
     s = EMACrossoverStrategy(ema_fast=3, ema_slow=5)
-    # Start with fast well below slow, then cross on the last bar.
-    # Fast EMA(3) of [90,95,100] ≈ 98.3; Slow EMA(5) of [80..100] ≈ 91.2 → fast < slow.
-    # Then spike: fast of [100,105,115] ≈ 108.3; slow of [85..115] ≈ 96.7 → fast > slow (cross).
-    series = [80, 82, 84, 86, 88, 90, 92, 94, 96, 98, 100, 100, 100, 100, 100, 105, 115]
+    # At bar 16: fast_ema(3) ≈ 86.0, slow_ema(5) ≈ 87.0 → fast < slow.
+    # At bar 17: fast_ema(3) ≈ 118.0, slow_ema(5) ≈ 108.0 → fast > slow (cross up).
+    series = [100, 99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 150]
     signal = s.generate_signal("BTCUSDT", _candles(series))
     assert signal.side is SignalSide.BUY
     assert signal.confidence > 0
@@ -123,8 +122,9 @@ def test_ema_crossover_buy_on_upward_cross():
 
 def test_ema_crossover_sell_on_downward_cross():
     s = EMACrossoverStrategy(ema_fast=3, ema_slow=5)
-    # Start with fast well above slow, then cross downward on the last bar.
-    series = [120, 118, 116, 114, 112, 110, 108, 106, 104, 102, 100, 100, 100, 100, 100, 95, 85]
+    # At bar 16: fast_ema(3) ≈ 114.0, slow_ema(5) ≈ 113.0 → fast > slow.
+    # At bar 17: fast_ema(3) ≈ 82.0, slow_ema(5) ≈ 92.0 → fast < slow (cross down).
+    series = [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 50]
     signal = s.generate_signal("BTCUSDT", _candles(series))
     assert signal.side is SignalSide.SELL
 

@@ -32,7 +32,7 @@ class _MkTraderAppState extends State<MkTraderApp> {
   void initState() {
     super.initState();
     _api = ApiService(baseUrl: _backendBase);
-    _ws = WsService(url: _backendBase.replaceFirst('http', 'ws') + '/ws');
+    _ws = WsService(url: '${_backendBase.replaceFirst('http', 'ws')}/ws');
     _bootstrap();
   }
 
@@ -46,7 +46,7 @@ class _MkTraderAppState extends State<MkTraderApp> {
       _themeMode = theme == 'light' ? ThemeMode.light : ThemeMode.dark;
       _api.setBaseUrl(url);
       _api.setAdminToken(token);
-      _ws.url = url.replaceFirst('http', 'ws') + '/ws';
+      _ws.url = '${url.replaceFirst('http', 'ws')}/ws';
     });
   }
 
@@ -54,7 +54,7 @@ class _MkTraderAppState extends State<MkTraderApp> {
     setState(() {
       _backendBase = url;
       _api.setBaseUrl(url);
-      _ws.url = url.replaceFirst('http', 'ws') + '/ws';
+      _ws.url = '${url.replaceFirst('http', 'ws')}/ws';
     });
   }
 
@@ -121,7 +121,7 @@ class _HomeShellState extends State<HomeShell> {
       PositionsScreen(api: widget.api),
       BalancesScreen(api: widget.api),
       DexScreen(api: widget.api),
-      HelpScreen(),
+      const HelpScreen(),
       SettingsScreen(
         backendBase: widget.backendBase,
         onBackendChanged: widget.onBackendChanged,
@@ -137,13 +137,34 @@ class _HomeShellState extends State<HomeShell> {
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), activeIcon: Icon(Icons.dashboard), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.list_alt_outlined), activeIcon: Icon(Icons.list_alt), label: 'Orders'),
-          BottomNavigationBarItem(icon: Icon(Icons.show_chart_outlined), activeIcon: Icon(Icons.show_chart), label: 'Positions'),
-          BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), activeIcon: Icon(Icons.account_balance_wallet), label: 'Balances'),
-          BottomNavigationBarItem(icon: Icon(Icons.link_outlined), activeIcon: Icon(Icons.link), label: 'DEX'),
-          BottomNavigationBarItem(icon: Icon(Icons.help_outline), activeIcon: Icon(Icons.help), label: 'Help'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), activeIcon: Icon(Icons.settings), label: 'Settings'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard_outlined),
+              activeIcon: Icon(Icons.dashboard),
+              label: 'Home'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.list_alt_outlined),
+              activeIcon: Icon(Icons.list_alt),
+              label: 'Orders'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.show_chart_outlined),
+              activeIcon: Icon(Icons.show_chart),
+              label: 'Positions'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              activeIcon: Icon(Icons.account_balance_wallet),
+              label: 'Balances'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.link_outlined),
+              activeIcon: Icon(Icons.link),
+              label: 'DEX'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.help_outline),
+              activeIcon: Icon(Icons.help),
+              label: 'Help'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.settings_outlined),
+              activeIcon: Icon(Icons.settings),
+              label: 'Settings'),
         ],
       ),
     );

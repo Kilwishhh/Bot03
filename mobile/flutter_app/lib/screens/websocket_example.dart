@@ -3,7 +3,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 class WebSocketExample extends StatefulWidget {
   final String url;
-  WebSocketExample({required this.url});
+  const WebSocketExample({super.key, required this.url});
   @override
   _WebSocketExampleState createState() => _WebSocketExampleState();
 }
@@ -38,13 +38,18 @@ class _WebSocketExampleState extends State<WebSocketExample> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Row(children: [
-          ElevatedButton(onPressed: channel==null?connect:disconnect, child: Text(channel==null? 'Connect':'Disconnect'))
-        ],),
-        SizedBox(height:8),
-        Expanded(child: ListView.builder(
+        Row(
+          children: [
+            ElevatedButton(
+                onPressed: channel == null ? connect : disconnect,
+                child: Text(channel == null ? 'Connect' : 'Disconnect'))
+          ],
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+            child: ListView.builder(
           itemCount: messages.length,
-          itemBuilder: (c,i) => ListTile(title: Text(messages[i])),
+          itemBuilder: (c, i) => ListTile(title: Text(messages[i])),
         ))
       ],
     );

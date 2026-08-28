@@ -50,6 +50,32 @@ try:
     app.include_router(prom_router)
 except Exception:
     pass
+
+# include ermis API routes (all scoped under /auth, /admin, /strategies, etc.)
+try:
+    from app.api.routes import (
+        admin_routes, user_routes, strategy_routes,
+        signal_routes, followup_routes, automation_routes,
+        connection_routes, publishing_routes, health_routes,
+        emergency_routes,
+    )
+    from app.api.admin_spa import router as admin_spa_router
+
+    app.include_router(admin_spa_router)
+    app.include_router(admin_routes.router)
+    app.include_router(user_routes.router)
+    app.include_router(strategy_routes.router)
+    app.include_router(signal_routes.router)
+    app.include_router(followup_routes.router)
+    app.include_router(automation_routes.router)
+    app.include_router(connection_routes.router)
+    app.include_router(publishing_routes.router)
+    app.include_router(health_routes.router)
+    app.include_router(emergency_routes.router)
+except Exception as exc:
+    import logging
+    logging.getLogger(__name__).warning("ermis routes unavailable: %s", exc)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in Settings().api_allowed_origins.split(",") if origin.strip()],
@@ -62,6 +88,22 @@ app.add_middleware(
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(HTTPSEnforcementMiddleware, require_https=Settings().api_require_https)
 app.add_middleware(RateLimitMiddleware, per_minute=Settings().api_rate_limit_per_minute)
+
+
+@app.get("/ui/{full_path:path}", include_in_schema=False)
+def ui_spa(full_path: str) -> FileResponse:
+    """Vite + React user UI."""
+    base = Path(__file__).resolve().parent.parent / "dashboard" / "dist"
+    if (base / full_path).exists() and (base / full_path).is_file():
+        return FileResponse(base / full_path)
+    return FileResponse(base / "index.html")
+
+
+@app.get("/ui", include_in_schema=False)
+def ui_index() -> FileResponse:
+    return FileResponse(
+        Path(__file__).resolve().parent.parent / "dashboard" / "dist" / "index.html"
+    )
 
 
 @app.get("/mobile", include_in_schema=False)
