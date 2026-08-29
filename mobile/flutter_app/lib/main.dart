@@ -8,6 +8,7 @@ import 'screens/home_screen.dart';
 import 'screens/orders_screen.dart';
 import 'screens/positions_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/signals_screen.dart';
 import 'services/api_service.dart';
 import 'services/ws_service.dart';
 import 'theme.dart';
@@ -120,6 +121,7 @@ class _HomeShellState extends State<HomeShell> {
       OrdersScreen(api: widget.api),
       PositionsScreen(api: widget.api),
       BalancesScreen(api: widget.api),
+      SignalsScreen(api: widget.api),
       DexScreen(api: widget.api),
       const HelpScreen(),
       SettingsScreen(
@@ -153,6 +155,10 @@ class _HomeShellState extends State<HomeShell> {
               icon: Icon(Icons.account_balance_wallet_outlined),
               activeIcon: Icon(Icons.account_balance_wallet),
               label: 'Balances'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.flash_on_outlined),
+              activeIcon: Icon(Icons.flash_on),
+              label: 'Signals'),
           BottomNavigationBarItem(
               icon: Icon(Icons.link_outlined),
               activeIcon: Icon(Icons.link),
