@@ -5,6 +5,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.auth import require_control_token
+from app.api.routes.config_routes import get_paper_config
 from app.config import Settings
 from app.database import TradingRepository
 from app.exchange import create_exchange
@@ -98,6 +99,7 @@ def control_start(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Exchange creation failed: {e}") from e
 
+    paper = get_paper_config()
     repository = TradingRepository(settings.database_path)
     repository.set_control_state("running")
     publisher = _build_publisher(settings)
@@ -109,18 +111,18 @@ def control_start(
             exchange,
             RiskManager(
                 Decimal(str(settings.max_daily_loss)),
-                settings.max_open_positions,
-                Decimal(str(settings.min_signal_confidence)),
-                settings.max_leverage,
+                int(paper.get("max_open_positions", 3)),
+                Decimal(str(paper.get("min_signal_confidence", 0.10))),
+                int(paper.get("max_leverage", 10)),
                 Decimal(str(settings.max_exposure)),
                 settings.max_consecutive_losses,
             ),
-            PositionSizer(Decimal(str(settings.risk_per_trade))),
+            PositionSizer(Decimal(str(paper.get("risk_per_trade", 0.01)))),
         ),
         repository,
         publisher,
-        leverage=settings.max_leverage,
-        position_notional=Decimal(str(settings.paper_position_notional)),
+        leverage=int(paper.get("max_leverage", 10)),
+        position_notional=Decimal(str(paper.get("paper_position_notional", 10.0))),
     )
 
     runner = BotRunner(

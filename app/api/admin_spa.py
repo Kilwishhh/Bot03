@@ -478,8 +478,89 @@ const pages = {
   },
 
   settings: async () => {
+    const cfg = await api('GET', '/admin/config');
+    const cfgEl = h('div', { class: 'card' });
+    cfgEl.appendChild(h('div', { class: 'card-title' }, 'Paper Trading Config'));
+    cfgEl.appendChild(h('div', { style: 'color:var(--muted);font-size:12px;margin-bottom:16px' }, 'Changes apply to the next bot cycle. Current values are highlighted below.'));
+
+    const fields = [
+      { key: 'paper_starting_balance', label: 'Starting Balance (USD)', step: '100', min: 100 },
+      { key: 'paper_position_notional', label: 'Position Notional per Trade (USD)', step: '1', min: 1 },
+      { key: 'max_leverage', label: 'Max Leverage (x)', step: '1', min: 1, max: 125, int: true },
+      { key: 'risk_per_trade', label: 'Risk per Trade (% of balance)', step: '0.005', min: 0.001, max: 0.05 },
+      { key: 'max_open_positions', label: 'Max Open Positions', step: '1', min: 1, max: 10, int: true },
+      { key: 'min_signal_confidence', label: 'Min Signal Confidence (0–1)', step: '0.05', min: 0, max: 1 },
+    ];
+
+    const inputs = {};
+    const form = h('div', { class: 'form-grid' });
+    for (const f of fields) {
+      const group = h('div', { class: 'form-group' });
+      group.appendChild(h('label', { class: 'form-label' }, f.label));
+      const input = h('input', {
+        class: 'form-input',
+        type: 'number',
+        step: f.step,
+        min: f.min,
+        max: f.max,
+        value: String(cfg[f.key]),
+      });
+      inputs[f.key] = input;
+      group.appendChild(input);
+      form.appendChild(group);
+    }
+    cfgEl.appendChild(form);
+
+    const status = h('div', { style: 'margin-top:16px;padding:10px;border-radius:6px;font-size:12px;display:none' });
+
+    const saveBtn = h('button', { class: 'btn btn-primary' }, '💾 Save Config');
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      const body = {};
+      for (const f of fields) {
+        const v = parseFloat(inputs[f.key].value);
+        if (isNaN(v)) { status.textContent = 'Invalid value for ' + f.label; status.style.display = 'block'; status.style.background = 'rgba(239,68,68,0.1)'; status.style.color = '#ef4444'; saveBtn.disabled = false; return; }
+        body[f.key] = f.int ? Math.round(v) : v;
+      }
+      try {
+        const r = await api('POST', '/admin/config', body);
+        status.textContent = '✓ Saved. New values will apply on next bot cycle.';
+        status.style.display = 'block';
+        status.style.background = 'rgba(34,197,94,0.1)';
+        status.style.color = '#22c55e';
+        // Refresh current values
+        setTimeout(() => navigate('settings'), 800);
+      } catch (e) {
+        status.textContent = 'Failed: ' + e.message;
+        status.style.display = 'block';
+        status.style.background = 'rgba(239,68,68,0.1)';
+        status.style.color = '#ef4444';
+      }
+      saveBtn.disabled = false;
+    });
+
+    const resetBtn = h('button', { class: 'btn btn-ghost', style: 'margin-left:8px' }, 'Reset to Defaults');
+    resetBtn.addEventListener('click', async () => {
+      if (!confirm('Reset all paper config to defaults?')) return;
+      const defaults = { paper_starting_balance: 10000, paper_position_notional: 10, max_leverage: 10, risk_per_trade: 0.01, max_open_positions: 3, min_signal_confidence: 0.10 };
+      try {
+        await api('POST', '/admin/config', defaults);
+        status.textContent = '✓ Reset to defaults.';
+        status.style.display = 'block';
+        status.style.background = 'rgba(34,197,94,0.1)';
+        status.style.color = '#22c55e';
+        setTimeout(() => navigate('settings'), 800);
+      } catch (e) { status.textContent = 'Failed: ' + e.message; status.style.display = 'block'; }
+    });
+
+    cfgEl.appendChild(h('div', { style: 'margin-top:16px;display:flex;align-items:center' }, [saveBtn, resetBtn, status]));
+
     return [
-      h('div', { class: 'page-header' }, [h('h1', { class: 'page-title' }, 'System Settings')]),
+      h('div', { class: 'page-header' }, [
+        h('h1', { class: 'page-title' }, 'System Settings'),
+        h('div', { class: 'page-sub' }, 'Runtime configuration for paper trading'),
+      ]),
+      cfgEl,
       h('div', { class: 'card' }, [
         h('div', { class: 'card-title' }, 'Runtime Mode'),
         h('div', { style: 'font-size:12px;color:var(--muted)' }, 'Controlled by TRADING_MODE env var: paper | testnet | live. Use /ready to check current state.'),

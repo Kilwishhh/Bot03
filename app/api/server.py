@@ -57,7 +57,7 @@ except Exception:
 # include ermis API routes (all scoped under /auth, /admin, /strategies, etc.)
 try:
     from app.api.routes import (
-        admin_routes, user_routes, strategy_routes,
+        admin_routes, config_routes, user_routes, strategy_routes,
         signal_routes, followup_routes, automation_routes,
         connection_routes, publishing_routes, health_routes,
         emergency_routes,
@@ -66,6 +66,7 @@ try:
 
     app.include_router(admin_spa_router)
     app.include_router(admin_routes.router)
+    app.include_router(config_routes.router)
     app.include_router(user_routes.router)
     app.include_router(strategy_routes.router)
     app.include_router(signal_routes.router)
