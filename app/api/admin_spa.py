@@ -9,7 +9,7 @@ import time
 import secrets
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 
 from app.api.dependencies import get_access_context
 from app.core.rbac import AccessContext
@@ -540,7 +540,8 @@ document.querySelectorAll('.nav-item[data-route]').forEach(el => {
 @router.get("/admin/login", include_in_schema=False)
 def admin_login():
     """Admin login page — sets sessionStorage token then redirects."""
-    return HTMLResponse("""<!doctype html>
+    return Response(
+        content="""<!doctype html>
 <html><head><title>Admin Login</title><style>
 body { background:#060812; color:#e6e8f0; font-family:system-ui; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
 .card { background:#0d1220; border:1px solid #2a3148; border-radius:10px; padding:32px; width:360px; }
@@ -613,4 +614,11 @@ document.getElementById('f-token').addEventListener('submit', async e => {
 
 @router.get("/admin", include_in_schema=False)
 def admin_dashboard():
-    return HTMLResponse(ADMIN_HTML)
+    return Response(
+        content=ADMIN_HTML,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
