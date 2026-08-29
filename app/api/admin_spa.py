@@ -149,6 +149,7 @@ ADMIN_HTML = """<!doctype html>
     </div>
   </aside>
   <main class="main">
+    <div id="debug-log" style="background:#1a2138;color:#f59e0b;font-size:11px;padding:6px 12px;border-radius:4px;margin-bottom:8px;font-family:monospace;"></div>
     <div id="root">Loading…</div>
   </main>
 </div>
@@ -524,13 +525,30 @@ document.querySelectorAll('.nav-item[data-route]').forEach(el => {
   el.addEventListener('click', e => { e.preventDefault(); navigate(el.getAttribute('data-route')); });
 });
 
+// ── Debug overlay (visible until everything works) ──────────────────
+function debug(msg) {
+  console.debug('[admin-spa]', msg);
+  const el = document.getElementById('debug-log');
+  if (el) el.textContent = msg;
+}
+
 // Init
 (async () => {
+  debug('init: hasToken=' + hasToken());
   if (!hasToken()) {
+    debug('no token → redirecting to /admin/login');
     location.href = '/admin/login';
     return;
   }
-  if (await loadMe()) navigate('overview');
+  debug('token found, calling loadMe...');
+  const ok = await loadMe();
+  debug('loadMe → ' + ok + ', role=' + (me ? me.role : 'null'));
+  if (ok) {
+    debug('authenticated → navigating to overview');
+    navigate('overview');
+  } else {
+    debug('loadMe failed — check error above');
+  }
 })();
 </script>
 </body>
@@ -540,7 +558,7 @@ document.querySelectorAll('.nav-item[data-route]').forEach(el => {
 @router.get("/admin/login", include_in_schema=False)
 def admin_login():
     """Admin login page — sets sessionStorage token then redirects."""
-    return Response(
+    return HTMLResponse(
         content="""<!doctype html>
 <html><head><title>Admin Login</title><style>
 body { background:#060812; color:#e6e8f0; font-family:system-ui; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
@@ -614,7 +632,7 @@ document.getElementById('f-token').addEventListener('submit', async e => {
 
 @router.get("/admin", include_in_schema=False)
 def admin_dashboard():
-    return Response(
+    return HTMLResponse(
         content=ADMIN_HTML,
         headers={
             "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",

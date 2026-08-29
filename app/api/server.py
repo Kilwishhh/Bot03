@@ -126,7 +126,10 @@ def service_worker() -> FileResponse:
 
 @app.get("/", include_in_schema=False)
 def landing() -> FileResponse:
-    return FileResponse(Path(__file__).with_name("index.html"))
+    return FileResponse(
+        Path(__file__).resolve().parent.parent.parent
+        / "dashboard" / "dist" / "index.html"
+    )
 
 
 @app.get("/health")
