@@ -253,70 +253,100 @@ const pages = {
 
   users: async () => {
     const users = await api('GET', '/admin/users');
-    const tbody = h('tbody');
+    const table = h('table', { style: 'width:100%;border-collapse:collapse' });
+    const thead = h('thead', {}, h('tr', {}, [
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Email'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Name'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Role'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Status'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Created'),
+      h('th', { style: 'text-align:right;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, ''),
+    ]));
+    const tbody = h('tbody', {});
     for (const u of users) {
-      tbody.appendChild(h('tr', {}, [
-        h('td', {}, u.email),
-        h('td', {}, u.display_name || ''),
-        h('td', {}, [h('span', { class: 'badge ' + (u.role === 'admin' ? 'badge-red' : 'badge-blue') }, u.role)]),
-        h('td', {}, [h('span', { class: 'badge ' + (u.status === 'active' ? 'badge-green' : 'badge-yellow') }, u.status)]),
-        h('td', {}, new Date(u.created_at).toLocaleDateString()),
-        h('td', {}, [
-          u.status === 'active'
-            ? h('button', { class: 'btn btn-ghost btn-sm', onClick: () => suspendUser(u.id) }, 'Suspend')
-            : h('span', { class: 'badge badge-gray' }, 'suspended'),
-        ]),
+      const roleBadge = h('span', { class: 'badge ' + (u.role === 'admin' ? 'badge-red' : 'badge-blue') }, u.role);
+      const statusBadge = h('span', { class: 'badge ' + (u.status === 'active' ? 'badge-green' : 'badge-yellow') }, u.status);
+      const actionCell = u.status === 'active'
+        ? h('button', { class: 'btn btn-ghost btn-sm', onClick: () => suspendUser(u.id) }, 'Suspend')
+        : h('span', { class: 'badge badge-gray' }, 'suspended');
+      tbody.appendChild(h('tr', { style: 'border-bottom:1px solid var(--border)' }, [
+        h('td', { style: 'padding:8px 12px' }, u.email),
+        h('td', { style: 'padding:8px 12px' }, u.display_name || ''),
+        h('td', { style: 'padding:8px 12px' }, [roleBadge]),
+        h('td', { style: 'padding:8px 12px' }, [statusBadge]),
+        h('td', { style: 'padding:8px 12px' }, u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'),
+        h('td', { style: 'padding:8px 12px;text-align:right' }, [actionCell]),
       ]));
     }
+    table.appendChild(thead);
+    table.appendChild(tbody);
     return [
       h('div', { class: 'page-header' }, [h('h1', { class: 'page-title' }, 'Users')]),
-      h('div', { class: 'card', style: 'padding:0' }, [h('table', {}, [h('thead', {}, h('tr', {}, [
-        h('th', {}, 'Email'), h('th', {}, 'Name'), h('th', {}, 'Role'),
-        h('th', {}, 'Status'), h('th', {}, 'Created'), h('th', {}, ''),
-      ])), tbody])]),
+      h('div', { class: 'card', style: 'padding:0;overflow:auto' }, [table]),
     ];
   },
 
   audit: async () => {
     const rows = await api('GET', '/admin/audit?limit=100');
+    const table = h('table', { style: 'width:100%;border-collapse:collapse' });
+    const thead = h('thead', {}, h('tr', {}, [
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'When'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Actor'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Role'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Action'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Target'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Result'),
+    ]));
+    const tbody = h('tbody', {});
+    for (const r of rows) {
+      const badge = h('span', { class: 'badge ' + (r.result === 'ok' ? 'badge-green' : 'badge-red') }, r.result || 'ok');
+      tbody.appendChild(h('tr', { style: 'border-bottom:1px solid var(--border)' }, [
+        h('td', { style: 'padding:8px 12px;font-size:11px;color:var(--muted)' }, new Date(r.created_at).toLocaleString()),
+        h('td', { style: 'padding:8px 12px' }, r.actor_user_id || '—'),
+        h('td', { style: 'padding:8px 12px' }, [h('span', { class: 'badge badge-gray' }, r.actor_role)]),
+        h('td', { style: 'padding:8px 12px' }, r.action),
+        h('td', { style: 'padding:8px 12px;font-size:11px' }, r.target_id || r.target_type || '—'),
+        h('td', { style: 'padding:8px 12px' }, [badge]),
+      ]));
+    }
+    table.appendChild(thead);
+    table.appendChild(tbody);
     return [
       h('div', { class: 'page-header' }, [h('h1', { class: 'page-title' }, 'Audit Log')]),
-      h('div', { class: 'card', style: 'padding:0' }, [h('table', {}, [h('thead', {}, h('tr', {}, [
-        h('th', {}, 'When'), h('th', {}, 'Actor'), h('th', {}, 'Role'),
-        h('th', {}, 'Action'), h('th', {}, 'Target'), h('th', {}, 'Result'),
-      ])), h('tbody', {}, rows.map(r => h('tr', {}, [
-        h('td', { style: 'font-size:11px;color:var(--muted)' }, new Date(r.created_at).toLocaleString()),
-        h('td', {}, r.actor_user_id || '—'),
-        h('td', {}, [h('span', { class: 'badge badge-gray' }, r.actor_role)]),
-        h('td', {}, r.action),
-        h('td', { style: 'font-size:11px' }, r.target_id || r.target_type || '—'),
-        h('td', {}, [h('span', { class: 'badge ' + (r.result === 'ok' ? 'badge-green' : 'badge-red') }, r.result || 'ok')]),
-      ])))]))]),
+      h('div', { class: 'card', style: 'padding:0;overflow:auto' }, [table]),
     ];
   },
 
   strategies: async () => {
     const strategies = await api('GET', '/admin/strategies');
+    const table = h('table', { style: 'width:100%;border-collapse:collapse' });
+    const thead = h('thead', {}, h('tr', {}, [
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Name'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'User'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Market'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Mode'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'State'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Updated'),
+    ]));
+    const tbody = h('tbody', {});
+    for (const s of strategies) {
+      tbody.appendChild(h('tr', { style: 'border-bottom:1px solid var(--border)' }, [
+        h('td', { style: 'padding:8px 12px' }, h('strong', {}, s.name)),
+        h('td', { style: 'padding:8px 12px;font-size:11px;color:var(--muted)' }, (s.user_id || '').slice(0, 8)),
+        h('td', { style: 'padding:8px 12px' }, s.market || '—'),
+        h('td', { style: 'padding:8px 12px' }, s.execution_mode || '—'),
+        h('td', { style: 'padding:8px 12px' }, [h('span', { class: 'badge ' + stateClass(s.lifecycle_state) }, s.lifecycle_state || '—')]),
+        h('td', { style: 'padding:8px 12px;font-size:11px;color:var(--muted)' }, s.updated_at ? new Date(s.updated_at).toLocaleString() : '—'),
+      ]));
+    }
+    table.appendChild(thead);
+    table.appendChild(tbody);
     return [
       h('div', { class: 'page-header' }, [
         h('h1', { class: 'page-title' }, 'All Strategies'),
         h('div', { class: 'page-sub' }, strategies.length + ' total across all users'),
       ]),
-      h('div', { class: 'card', style: 'padding:0' }, [h('table', {}, [
-        h('thead', {}, h('tr', {}, [
-          h('th', {}, 'Name'), h('th', {}, 'User'),
-          h('th', {}, 'Market'), h('th', {}, 'Mode'), h('th', {}, 'State'),
-          h('th', {}, 'Updated'),
-        ])),
-        h('tbody', {}, strategies.map(s => h('tr', {}, [
-          h('td', {}, h('strong', {}, s.name)),
-          h('td', { style: 'font-size:11px;color:var(--muted)' }, (s.user_id || '').slice(0, 8)),
-          h('td', {}, s.market),
-          h('td', {}, s.execution_mode),
-          h('td', {}, [h('span', { class: 'badge ' + stateClass(s.lifecycle_state) }, s.lifecycle_state)]),
-          h('td', { style: 'font-size:11px;color:var(--muted)' }, new Date(s.updated_at).toLocaleString()),
-        ]))),
-      ])]),
+      h('div', { class: 'card', style: 'padding:0;overflow:auto' }, [table]),
     ];
   },
 
@@ -329,21 +359,30 @@ const pages = {
 
   signals: async () => {
     const signals = await api('GET', '/signals?limit=50');
+    const table = h('table', { style: 'width:100%;border-collapse:collapse' });
+    const thead = h('thead', {}, h('tr', {}, [
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Symbol'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Side'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Confidence'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Strategy'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'When'),
+    ]));
+    const tbody = h('tbody', {});
+    for (const s of signals) {
+      const sideCls = s.side === 'BUY' ? 'badge-green' : s.side === 'SELL' ? 'badge-red' : 'badge-gray';
+      tbody.appendChild(h('tr', { style: 'border-bottom:1px solid var(--border)' }, [
+        h('td', { style: 'padding:8px 12px' }, h('strong', {}, s.symbol || '—')),
+        h('td', { style: 'padding:8px 12px' }, [h('span', { class: 'badge ' + sideCls }, s.side || '—')]),
+        h('td', { style: 'padding:8px 12px' }, s.confidence != null ? (s.confidence * 100).toFixed(0) + '%' : '—'),
+        h('td', { style: 'padding:8px 12px;font-size:11px;color:var(--muted)' }, s.strategy || s.strategy_name || '—'),
+        h('td', { style: 'padding:8px 12px;font-size:11px;color:var(--muted)' }, s.created_at ? new Date(s.created_at).toLocaleString() : s.timestamp ? new Date(s.timestamp).toLocaleString() : '—'),
+      ]));
+    }
+    table.appendChild(thead);
+    table.appendChild(tbody);
     return [
       h('div', { class: 'page-header' }, [h('h1', { class: 'page-title' }, 'All Signals')]),
-      h('div', { class: 'card', style: 'padding:0' }, [h('table', {}, [
-        h('thead', {}, h('tr', {}, [
-          h('th', {}, 'Symbol'), h('th', {}, 'Side'),
-          h('th', {}, 'Confidence'), h('th', {}, 'Strategy'), h('th', {}, 'When'),
-        ])),
-        h('tbody', {}, signals.map(s => h('tr', {}, [
-          h('td', {}, h('strong', {}, s.symbol)),
-          h('td', {}, [h('span', { class: 'badge ' + (s.side === 'BUY' ? 'badge-green' : s.side === 'SELL' ? 'badge-red' : 'badge-gray') }, s.side)]),
-          h('td', {}, (s.confidence * 100).toFixed(0) + '%'),
-          h('td', {}, s.strategy_name),
-          h('td', { style: 'font-size:11px;color:var(--muted)' }, new Date(s.created_at).toLocaleString()),
-        ]))),
-      ])]),
+      h('div', { class: 'card', style: 'padding:0;overflow:auto' }, [table]),
     ];
   },
 
@@ -412,19 +451,28 @@ const pages = {
         h('div', { class: 'card-title' }, 'Active Pauses (' + (pauses.length || 0) + ')'),
         pauses.length === 0
           ? h('div', { class: 'empty' }, 'No active pauses')
-          : h('table', {}, [
-              h('thead', {}, h('tr', {}, [
-                h('th', {}, 'Scope'), h('th', {}, 'Target'),
-                h('th', {}, 'Reason'), h('th', {}, 'When'), h('th', {}, ''),
-              ])),
-              h('tbody', {}, pauses.map(p => h('tr', {}, [
-                h('td', {}, [h('span', { class: 'badge badge-red' }, p.scope)]),
-                h('td', { style: 'font-size:11px' }, p.scope_target || '—'),
-                h('td', { style: 'font-size:12px' }, p.reason || '—'),
-                h('td', { style: 'font-size:11px;color:var(--muted)' }, new Date(p.created_at).toLocaleString()),
-                h('td', {}, h('button', { class: 'btn btn-success btn-sm', onClick: () => resumePause(p.id) }, 'Resume')),
-              ]))),
-            ]),
+          : (() => {
+              const table = h('table', { style: 'width:100%;border-collapse:collapse' });
+              table.appendChild(h('thead', {}, h('tr', {}, [
+                h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Scope'),
+                h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Target'),
+                h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Reason'),
+                h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'When'),
+                h('th', { style: 'text-align:right;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, ''),
+              ])));
+              const tbody = h('tbody', {});
+              for (const p of pauses) {
+                tbody.appendChild(h('tr', { style: 'border-bottom:1px solid var(--border)' }, [
+                  h('td', { style: 'padding:8px 12px' }, [h('span', { class: 'badge badge-red' }, p.scope)]),
+                  h('td', { style: 'padding:8px 12px;font-size:11px' }, p.scope_target || '—'),
+                  h('td', { style: 'padding:8px 12px;font-size:12px' }, p.reason || '—'),
+                  h('td', { style: 'padding:8px 12px;font-size:11px;color:var(--muted)' }, p.created_at ? new Date(p.created_at).toLocaleString() : '—'),
+                  h('td', { style: 'padding:8px 12px;text-align:right' }, [h('button', { class: 'btn btn-success btn-sm', onClick: () => resumePause(p.id) }, 'Resume')]),
+                ]));
+              }
+              table.appendChild(tbody);
+              return table;
+            })(),
       ]),
     ];
   },
