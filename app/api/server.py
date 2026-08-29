@@ -1,5 +1,7 @@
 """Safe HTTP API foundation for the mobile application."""
 
+import asyncio
+from contextlib import asynccontextmanager
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -18,6 +20,13 @@ from app.api.security import (
     SecurityHeadersMiddleware,
     get_audit_logger,
 )
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    from app.api.ws_broker import set_loop
+    set_loop(asyncio.get_running_loop())
+    yield
 from app.config import ExchangeProvider, Settings
 from app.database import TradingRepository
 from app.exchange.models import OrderRequest, OrderSide, OrderType
@@ -26,7 +35,7 @@ from app.notifications import BinanceSquarePoster
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = FastAPI(title="Crypto Trading Bot API", version="0.1.0")
+app = FastAPI(title="Crypto Trading Bot API", version="0.1.0", lifespan=_lifespan)
 
 # Serve shared CSS/JS for the web dashboards.
 if STATIC_DIR.is_dir():

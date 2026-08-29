@@ -131,7 +131,7 @@ ADMIN_HTML = """<!doctype html>
       <a class="nav-item" data-route="signals">◈ All Signals</a>
 
       <div class="nav-section">Operations</div>
-      <a class="nav-item" data-route="integrations">⬡ Integrations</a>
+      <a class="nav-item" data-route="operations"><span id="nav-status-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#6b7280;margin-right:6px;vertical-align:middle"></span>◈ Bot Operations</a>
       <a class="nav-item" data-route="health">♥ System Health</a>
       <a class="nav-item" data-route="logs">☰ Logs &amp; Events</a>
       <a class="nav-item" data-route="alerts">⚠ Alerts</a>
@@ -157,7 +157,79 @@ ADMIN_HTML = """<!doctype html>
 <script>
 /* Admin SPA — minimal vanilla JS, no build step. */
 
-// Auth headers: Bearer for session JWT tokens, X-Admin-Token for raw admin keys.
+// ── WebSocket client for live bot events ─────────────────────────────
+
+const eventLog = [];
+let _botRunning = false;
+let _eventFeed = null;   // ref to live-feed div in the operations page
+let _statusBadge = null; // ref to status badge in sidebar
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(proto + '://' + location.host + '/ws');
+  ws.addEventListener('message', ev => {
+    try {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === 'status') {
+        _botRunning = !!msg.running;
+        updateBotStatusBadge(msg);
+        if (_eventFeed) renderEventFeed();
+      } else if (['bot_started', 'bot_stopped', 'bot_stop_requested', 'events', 'error', 'ping'].includes(msg.type)) {
+        if (msg.type !== 'ping') {
+          eventLog.unshift({ ...msg, ts: new Date().toLocaleTimeString() });
+          if (eventLog.length > 50) eventLog.pop();
+        }
+        if (_eventFeed) renderEventFeed();
+      }
+    } catch (_) {}
+  });
+  ws.addEventListener('close', () => { setTimeout(connectWS, 3000); });
+}
+
+function updateBotStatusBadge(status) {
+  // Sidebar dot
+  const dot = document.getElementById('nav-status-dot');
+  if (dot) dot.style.background = status.running ? '#22c55e' : '#6b7280';
+  // Operations page badge
+  if (_statusBadge) {
+    const d = _statusBadge.querySelector('.status-dot');
+    const t = _statusBadge.querySelector('.status-text');
+    if (!d || !t) return;
+    d.style.background = status.running ? '#22c55e' : '#6b7280';
+    t.textContent = status.running ? 'Running' : 'Stopped';
+    t.style.color = status.running ? '#22c55e' : '#6b7280';
+  }
+}
+
+function renderEventFeed() {
+  if (!_eventFeed) return;
+  _eventFeed.innerHTML = '';
+  for (const ev of eventLog.slice(0, 30)) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)';
+    const dot = document.createElement('span');
+    dot.style.cssText = 'width:6px;height:6px;border-radius:50%;flex-shrink:0;background=' + (ev.type === 'error' ? '#ef4444' : ev.type.startsWith('bot_') ? '#22c55e' : '#60a5fa');
+    const meta = document.createElement('span');
+    meta.style.cssText = 'font-size:11px;color:var(--muted);flex-shrink:0;min-width:70px';
+    meta.textContent = ev.ts;
+    const type = document.createElement('span');
+    type.style.cssText = 'font-size:11px;font-weight:600;color=' + (ev.type === 'error' ? '#ef4444' : '#a78bfa') + ';min-width:120px';
+    type.textContent = ev.type;
+    const msg = document.createElement('span');
+    msg.style.cssText = 'font-size:12px;color:var(--text)';
+    msg.textContent = ev.message || '';
+    row.appendChild(dot); row.appendChild(meta); row.appendChild(type); row.appendChild(msg);
+    _eventFeed.appendChild(row);
+  }
+  if (!eventLog.length) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'color:var(--muted);font-size:12px;text-align:center;padding:16px';
+    empty.textContent = 'No events yet — start the bot to see live activity.';
+    _eventFeed.appendChild(empty);
+  }
+}
+
+connectWS();
 function headers() {
   const session = localStorage.getItem('mk_token');
   if (session) return { 'Authorization': 'Bearer ' + session, 'Content-Type': 'application/json' };
@@ -386,21 +458,92 @@ const pages = {
     ];
   },
 
-  integrations: async () => {
+  operations: async () => {
+    const status = await api('GET', '/control/status');
+    const adminStatus = await api('GET', '/admin/status');
+    _botRunning = !!status.running;
+
+    const card = h('div', { class: 'card' });
+    card.appendChild(h('div', { class: 'card-title' }, 'Bot Control'));
+
+    const statusRow = h('div', { style: 'display:flex;align-items:center;gap:16px;margin-bottom:16px' });
+    const statusDot = h('span', { style: 'width:10px;height:10px;border-radius:50%;background:' + (_botRunning ? '#22c55e' : '#6b7280') });
+    const statusTxt = h('span', { style: 'font-weight:700;font-size:14px;color:' + (_botRunning ? '#22c55e' : '#6b7280') }, _botRunning ? 'RUNNING' : 'STOPPED');
+    statusRow.appendChild(statusDot);
+    statusRow.appendChild(statusTxt);
+    statusRow.appendChild(h('span', { style: 'color:var(--muted);font-size:12px' }, '— ' + (adminStatus.mode || 'paper').toUpperCase() + ' mode · ' + (adminStatus.symbol || 'BTCUSDT') + ' ' + (adminStatus.timeframe || '15m')));
+    if (status.completed_cycles !== undefined) {
+      statusRow.appendChild(h('span', { style: 'color:var(--muted);font-size:12px' }, '· ' + status.completed_cycles + ' cycles'));
+    }
+    card.appendChild(statusRow);
+
+    const ctrls = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' });
+    const startBtn = h('button', { class: 'btn btn-primary' }, '▶ Start Bot');
+    const stopBtn  = h('button', { class: 'btn btn-danger' }, '⏹ Stop Bot');
+    const refreshBtn = h('button', { class: 'btn btn-ghost' }, '↻ Refresh Status');
+
+    const setRunning = (r) => {
+      startBtn.disabled = r; startBtn.style.opacity = r ? 0.5 : 1;
+      stopBtn.disabled = !r; stopBtn.style.opacity = !r ? 0.5 : 1;
+    };
+    setRunning(_botRunning);
+
+    startBtn.addEventListener('click', async () => {
+      startBtn.disabled = true; startBtn.textContent = 'Starting…';
+      try {
+        const cycles = parseInt(prompt('Cycles (0 = infinite, default 0):', '0') || '0', 10);
+        if (isNaN(cycles) || cycles < 0) { alert('Invalid cycles'); startBtn.disabled = false; startBtn.textContent = '▶ Start Bot'; return; }
+        const r = await api('POST', '/control/start?cycles=' + cycles, {});
+        eventLog.unshift({ type: 'bot_started', message: r.status, ts: new Date().toLocaleTimeString() });
+        _botRunning = true; setRunning(true);
+        statusDot.style.background = '#22c55e'; statusTxt.textContent = 'RUNNING'; statusTxt.style.color = '#22c55e';
+        renderEventFeed();
+      } catch (e) { alert('Start failed: ' + e.message); startBtn.disabled = false; startBtn.textContent = '▶ Start Bot'; }
+    });
+
+    stopBtn.addEventListener('click', async () => {
+      if (!confirm('Stop the trading bot?')) return;
+      stopBtn.disabled = true; stopBtn.textContent = 'Stopping…';
+      try {
+        const r = await api('POST', '/control/stop', {});
+        eventLog.unshift({ type: 'bot_stop_requested', message: r.status, ts: new Date().toLocaleTimeString() });
+        _botRunning = false; setRunning(false);
+        statusDot.style.background = '#6b7280'; statusTxt.textContent = 'STOPPING…'; statusTxt.style.color = '#fbbf24';
+        renderEventFeed();
+      } catch (e) { alert('Stop failed: ' + e.message); stopBtn.disabled = false; stopBtn.textContent = '⏹ Stop Bot'; }
+    });
+
+    refreshBtn.addEventListener('click', async () => {
+      try {
+        const s = await api('GET', '/control/status');
+        _botRunning = !!s.running;
+        statusDot.style.background = _botRunning ? '#22c55e' : '#6b7280';
+        statusTxt.textContent = _botRunning ? 'RUNNING' : 'STOPPED';
+        statusTxt.style.color = _botRunning ? '#22c55e' : '#6b7280';
+        setRunning(_botRunning);
+      } catch (e) { alert('Refresh failed: ' + e.message); }
+    });
+
+    ctrls.appendChild(startBtn); ctrls.appendChild(stopBtn); ctrls.appendChild(refreshBtn);
+    card.appendChild(ctrls);
+
+    // Live event feed
+    const feedCard = h('div', { class: 'card' });
+    feedCard.appendChild(h('div', { class: 'card-title', style: 'display:flex;align-items:center;justify-content:space-between' }, [
+      h('span', {}, 'Live Event Feed'),
+      h('span', { style: 'color:var(--muted);font-size:11px' }, 'WebSocket · auto-updates'),
+    ]));
+    _eventFeed = h('div', { style: 'max-height:380px;overflow-y:auto;padding:0 4px' });
+    feedCard.appendChild(_eventFeed);
+    renderEventFeed();
+
     return [
-      h('div', { class: 'page-header' }, [h('h1', { class: 'page-title' }, 'Integrations')]),
-      h('div', { class: 'card' }, [
-        h('div', { class: 'card-title' }, 'Binance Square'),
-        h('div', { style: 'color:var(--muted);font-size:12px' }, 'POST /admin/square/enqueue, /flush, /status, /toggle — auto-dedup, 3 posts/day limit'),
+      h('div', { class: 'page-header' }, [
+        h('h1', { class: 'page-title' }, 'Bot Operations'),
+        h('div', { class: 'page-sub' }, 'Start/stop the trading engine and watch events live'),
       ]),
-      h('div', { class: 'card' }, [
-        h('div', { class: 'card-title' }, 'Telegram'),
-        h('div', { style: 'color:var(--muted);font-size:12px' }, 'POST /admin/telegram/send — channel poster'),
-      ]),
-      h('div', { class: 'card' }, [
-        h('div', { class: 'card-title' }, 'DEX (disabled)'),
-        h('div', { style: 'color:var(--muted);font-size:12px' }, 'POST /admin/dex/preview, /approve, /place — Phase 6 scaffold only'),
-      ]),
+      card,
+      feedCard,
     ];
   },
 

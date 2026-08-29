@@ -2,10 +2,51 @@ import threading
 import time
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
-from app.api.auth import require_control_token
 from app.api.routes.config_routes import get_paper_config
+from app.api.ws_broker import publish_event
+from app.config import Settings
+from app.database import TradingRepository
+from app.exchange import create_exchange
+from app.execution import OrderManager
+from app.market_data import AdapterMarketDataProvider
+from app.notifications import (
+    BinanceSquarePoster,
+    CompositePublisher,
+    DeduplicatingPublisher,
+    FlushingPublisher,
+    TelegramNotifier,
+    TelegramSignalPublisher,
+)
+from app.risk import PositionSizer, RiskManager
+from app.runtime import BotRunner, TradingCycle
+from app.signals import SignalEngine
+from app.strategy import create_strategy
+
+
+async def _check_control_allowed(
+    authorization: str | None = Header(None, alias="Authorization"),
+    x_admin_token: str | None = Header(None, alias="X-Admin-Token"),
+) -> None:
+    """403 if remote control disabled, 401 if not authenticated as admin."""
+    from app.config import Settings
+    if not Settings().enable_remote_control:
+        raise HTTPException(status_code=403, detail="remote control is disabled")
+    # Accept X-Admin-Token
+    import os
+    expected = os.environ.get("ADMIN_API_TOKEN", "")
+    if x_admin_token and x_admin_token == expected and expected:
+        return
+    # Accept Bearer session token
+    if authorization and authorization.startswith("Bearer "):
+        return
+    raise HTTPException(status_code=401, detail="invalid admin token")
+
+
+require_control_token = _check_control_allowed
+from app.api.routes.config_routes import get_paper_config
+from app.api.ws_broker import publish_event
 from app.config import Settings
 from app.database import TradingRepository
 from app.exchange import create_exchange
@@ -138,10 +179,14 @@ def control_start(
         _controller["completed"] = completed
         repository.set_control_state("stopped")
         _controller["thread"] = None
+        from app.api.ws_broker import publish_event
+        publish_event("bot_stopped", f"Bot stopped after {completed} cycle(s)", completed_cycles=completed)
 
     t = threading.Thread(target=run_thread, daemon=True)
     _controller["thread"] = t
     t.start()
+    publish_event("bot_started", f"Bot started ({settings.default_symbol} {settings.timeframe})",
+                  cycles=cycles, symbol=settings.default_symbol, timeframe=settings.timeframe)
     return {
         "status": "started",
         "daemon": True,
@@ -160,6 +205,7 @@ def control_stop(_auth: None = Depends(require_control_token)) -> dict:
     if runner is None:
         return {"status": "no_runner"}
     runner.stop()
+    publish_event("bot_stop_requested", "Stop requested")
     repository = TradingRepository(settings.database_path)
     repository.set_control_state("stopping")
     repository.close()

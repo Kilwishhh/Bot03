@@ -4,5 +4,5 @@
   "max_leverage": 10,
   "risk_per_trade": 0.01,
   "max_open_positions": 3,
-  "min_signal_confidence": 0.05
+  "min_signal_confidence": 0.0
 }
