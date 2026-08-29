@@ -3,6 +3,9 @@
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -256,11 +259,6 @@ def errors(limit: int = 20) -> list[dict[str, object]]:
         return [{"error_type": row[0], "message": row[1], "created_at": row[2]} for row in rows]
     finally:
         repository.close()
-
-
-@app.get("/admin", include_in_schema=False)
-def admin_dashboard() -> FileResponse:
-    return FileResponse(Path(__file__).with_name("admin.html"))
 
 
 @app.get("/admin/status")

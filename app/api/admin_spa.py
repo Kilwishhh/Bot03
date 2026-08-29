@@ -156,14 +156,17 @@ ADMIN_HTML = """<!doctype html>
 <script>
 /* Admin SPA — minimal vanilla JS, no build step. */
 
-const token = localStorage.getItem('mk_token') || sessionStorage.getItem('mk_admin_token') || '';
-
-// Auth headers: Bearer if we have a token, else fallback to X-Admin-Token
+// Auth headers: Bearer for session JWT tokens, X-Admin-Token for raw admin keys.
 function headers() {
-  if (token) return { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
-  const adminTok = sessionStorage.getItem('mk_admin_token') || '';
-  if (adminTok) return { 'X-Admin-Token': adminTok, 'Content-Type': 'application/json' };
+  const session = localStorage.getItem('mk_token');
+  if (session) return { 'Authorization': 'Bearer ' + session, 'Content-Type': 'application/json' };
+  const adminKey = sessionStorage.getItem('mk_admin_token');
+  if (adminKey) return { 'X-Admin-Token': adminKey, 'Content-Type': 'application/json' };
   return { 'Content-Type': 'application/json' };
+}
+
+function hasToken() {
+  return !!(localStorage.getItem('mk_token') || sessionStorage.getItem('mk_admin_token'));
 }
 
 async function api(method, path, body) {
@@ -523,7 +526,7 @@ document.querySelectorAll('.nav-item[data-route]').forEach(el => {
 
 // Init
 (async () => {
-  if (!token && !sessionStorage.getItem('mk_admin_token')) {
+  if (!hasToken()) {
     location.href = '/admin/login';
     return;
   }
@@ -589,7 +592,7 @@ document.getElementById('f-login').addEventListener('submit', async e => {
     if (!r.ok) throw new Error(await r.text());
     const d = await r.json();
     localStorage.setItem('mk_token', d.token);
-    location.href = '/admin/dashboard';
+    location.href = '/admin';
   } catch (e) { showError(e.message); }
 });
 
@@ -601,19 +604,13 @@ document.getElementById('f-token').addEventListener('submit', async e => {
     const r = await fetch('/admin/status', { headers: {'X-Admin-Token': t} });
     if (!r.ok) throw new Error('Invalid admin token');
     sessionStorage.setItem('mk_admin_token', t);
-    location.href = '/admin/dashboard';
+    location.href = '/admin';
   } catch (e) { showError(e.message); }
 });
 </script>
 </body></html>""")
 
 
-@router.get("/admin/dashboard", include_in_schema=False)
+@router.get("/admin", include_in_schema=False)
 def admin_dashboard():
     return HTMLResponse(ADMIN_HTML)
-
-
-@router.get("/admin/old", include_in_schema=False)
-def admin_legacy():
-    """Keep the old admin.html for backward compat."""
-    return FileResponse(Path(__file__).with_name("admin.html"))
