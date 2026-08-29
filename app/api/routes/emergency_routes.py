@@ -27,11 +27,17 @@ def pause(
     ctx: AccessContext = Depends(get_access_context),
 ):
     from app.services.emergency_service import EmergencyService
+    from app.domain.connection import EmergencyScope
     svc = EmergencyService()
     try:
+        scope = payload.get("scope", EmergencyScope.USER.value)
+        # User-scope pauses without explicit target default to the caller's own ID
+        scope_target = payload.get("scope_target")
+        if scope == EmergencyScope.USER.value and not scope_target:
+            scope_target = ctx.user.id
         p = svc.pause(
-            scope=payload.get("scope", "user"),
-            scope_target=payload.get("scope_target"),
+            scope=scope,
+            scope_target=scope_target,
             reason=payload.get("reason", ""),
             ctx=ctx,
             close_positions=bool(payload.get("close_positions", False)),

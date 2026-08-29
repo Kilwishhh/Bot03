@@ -45,10 +45,10 @@ class EmergencyService:
         try:
             with self._lock:
                 conn.execute(
-                    "INSERT INTO emergency_pauses VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO emergency_pauses VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (pause_id, scope, scope_target, ctx.user.id,
                      (ctx.user.role.value if hasattr(ctx.user.role, "value") else str(ctx.user.role)),
-                     reason, 1 if close_positions else 0, now, expires_at),
+                     reason, 1 if close_positions else 0, now, expires_at, None),
                 )
             record(actor=ctx.user, action="emergency.pause",
                    target_type=f"emergency:{scope}", target_id=scope_target,
