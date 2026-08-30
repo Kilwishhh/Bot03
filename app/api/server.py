@@ -99,6 +99,18 @@ except Exception as exc:
     import logging
     logging.getLogger(__name__).warning("ermis routes unavailable: %s", exc)
 
+# Safety net: ensure dev routes are always registered even if the try block above
+# silently failed (the warn-and-continue pattern swallows errors here).
+# Only include if not already present.
+_dev_paths = {r.path for r in app.routes if hasattr(r, "path")}
+if not any("/dev/" in p for p in _dev_paths):
+    try:
+        from app.api.routes import dev_routes as _dev_routes
+        app.include_router(_dev_routes.router)
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).warning("dev_routes fallback include failed: %s", _e)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in Settings().api_allowed_origins.split(",") if origin.strip()],

@@ -1,5 +1,6 @@
 """Small SQLite repository for Phase 1/2 operational records."""
 
+import os
 import sqlite3
 import threading
 from datetime import UTC, datetime, timedelta
@@ -10,10 +11,12 @@ from app.signals.models import Signal
 
 
 class TradingRepository:
-    def __init__(self, database_path: str | Path = "trading.db") -> None:
+    def __init__(self, database_path: str | Path | None = None) -> None:
         # check_same_thread=False because the API server runs in one thread and
         # the bot runner in another. A per-instance lock serializes all writes
         # so we don't corrupt the database or hit "objects created in a thread".
+        if database_path is None:
+            database_path = os.environ.get("DATABASE_PATH", "trading.db")
         self._lock = threading.RLock()
         self._connection = sqlite3.connect(
             str(database_path), check_same_thread=False, isolation_level=None

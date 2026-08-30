@@ -8,7 +8,7 @@ PORT=8000
 echo "[restart] killing anything on port $PORT..."
 PID=$(netstat -ano | grep ":$PORT " | grep LISTENING | awk '{print $NF}' | head -1)
 if [ -n "$PID" ]; then
-    cmd //c "taskkill /PID $PID /F" || echo "[restart] manual kill needed for PID $PID"
+    powershell -Command "Stop-Process -Id $PID -Force -ErrorAction SilentlyContinue; Write-Host 'killed $PID'"
     sleep 2
 else
     echo "[restart] nothing listening on $PORT"

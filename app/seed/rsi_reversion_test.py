@@ -42,6 +42,8 @@ TEST_DISPLAY = "Test User"
 STRATEGY_NAME = "RSI Reversion 1M Test"
 STRATEGY_DESC = "Mean-reversion on RSI(14) oversold/overbought, 1m timeframe, paper-only fixture"
 TEMPLATE_NAME = "rsi_reversion_1m_test"
+# Canonical UUID used by test files so hardcoded IDs in tests always find this strategy
+CANONICAL_STRATEGY_ID = "47ddb081-d9bb-454d-bc67-f715d96ef6c4"
 DB_PATH = "trading.db"
 
 
@@ -99,58 +101,63 @@ def _get_existing_strategy_id(user_id: str) -> str | None:
 
 
 def _get_or_create_strategy(user: User) -> str:
-    existing = _get_existing_strategy_id(user.id)
-    if existing:
-        return existing
+    # First check if a strategy with the canonical ID already exists (idempotent reseed)
+    import sqlite3
+    _conn = sqlite3.connect(DB_PATH)
+    try:
+        existing = _conn.execute(
+            "SELECT id FROM strategies WHERE id = ?", (CANONICAL_STRATEGY_ID,)).fetchone()
+        if existing:
+            return existing[0]
+    finally:
+        _conn.close()
 
-    ctx = AccessContext(user=user)
-    svc = StrategyService(DB_PATH)
-    entry = EntryConfig(
-        indicators=[{"name": "rsi", "period": 14, "source": "close"}],
-        conditions=[
+    # Use a direct INSERT (bypassing StrategyService which auto-generates a UUID)
+    # so the canonical test ID is preserved.
+    now = datetime.now(UTC).isoformat()
+    entry_cfg = json.dumps({
+        "indicators": [{"name": "rsi", "period": 14, "source": "close"}],
+        "conditions": [
             {"indicator": "rsi", "op": "<=", "value": 30, "then": "long"},
             {"indicator": "rsi", "op": ">=", "value": 70, "then": "short"},
         ],
-        template="rsi_reversion_1m_test",
-    )
-    exit_cfg = ExitConfig(
-        tp1_pct=0.003,         # 0.30% take profit
-        tp2_pct=0.0,           # no TP2
-        stop_loss_pct=0.005,    # 0.50% stop loss
-        trailing_stop=False,
-    )
-    risk = RiskConfig(
-        max_per_trade=0.01,         # 1% per trade
-        max_daily_loss=0.05,
-        max_open_positions=3,
-        max_leverage=10,
-        max_exposure=0.5,
-    )
-    s = svc.create(
-        payload={
-            "name": STRATEGY_NAME,
-            "description": STRATEGY_DESC,
-            "execution_mode": ExecutionMode.PAPER.value,
-            "execution_venue": ExecutionVenue.BINANCE.value,
-            "market": "BTCUSDT",
-            "timeframe": Timeframe.M1.value,
-            "entry_config": entry.to_dict(),
-            "exit_config": exit_cfg.to_dict(),
-            "risk_config": risk.to_dict(),
-            "template_name": TEMPLATE_NAME,
-            "template_params": {
-                "rsi_period": 14,
-                "rsi_oversold": 30,
-                "rsi_overbought": 70,
-                "tp1_pct": 0.003,
-                "stop_loss_pct": 0.005,
-                "cooldown_seconds": 180,
-                "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
-            },
-        },
-        ctx=ctx,
-    )
-    return s.id
+        "template": TEMPLATE_NAME,
+    })
+    exit_cfg = json.dumps({"tp1_pct": 0.003, "tp2_pct": 0.0,
+                           "stop_loss_pct": 0.005, "trailing_stop": False})
+    risk_cfg = json.dumps({"max_per_trade": 0.01, "max_daily_loss": 0.05,
+                           "max_open_positions": 3, "max_leverage": 10,
+                           "max_exposure": 0.5})
+    template_params = json.dumps({
+        "rsi_period": 14, "rsi_oversold": 30, "rsi_overbought": 70,
+        "tp1_pct": 0.003, "stop_loss_pct": 0.005, "cooldown_seconds": 180,
+        "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    })
+
+    _conn = sqlite3.connect(DB_PATH)
+    try:
+        _conn.execute(
+            "INSERT OR REPLACE INTO strategies "
+            "(id, user_id, name, description, version, lifecycle_state, execution_mode, "
+            " execution_venue, market, timeframe, entry_config, exit_config, risk_config, "
+            " template_name, template_params, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (CANONICAL_STRATEGY_ID, user.id, STRATEGY_NAME, STRATEGY_DESC, 1,
+             LifecycleState.PAPER.value, ExecutionMode.PAPER.value,
+             ExecutionVenue.BINANCE.value, "BTCUSDT", Timeframe.M1.value,
+             entry_cfg, exit_cfg, risk_cfg, TEMPLATE_NAME, template_params, now, now),
+        )
+        _conn.execute(
+            "INSERT OR REPLACE INTO strategy_lifecycle_events "
+            "(id, strategy_id, from_state, to_state, actor_user_id, actor_role, reason, created_at) "
+            "VALUES (?, ?, NULL, ?, ?, ?, ?, ?)",
+            (None, CANONICAL_STRATEGY_ID, LifecycleState.PAPER.value,
+             user.id, "system", "seeded", now),
+        )
+        _conn.commit()
+        return CANONICAL_STRATEGY_ID
+    finally:
+        _conn.close()
 
 
 def _seed_publishing_config(user: User) -> None:

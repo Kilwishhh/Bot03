@@ -1,5 +1,6 @@
 """Dev/test simulation routes — STRATEGY-TEST-001."""
 import json
+import sqlite3
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
@@ -48,20 +49,36 @@ def _fetch_candles(symbol: str, interval: str = "1m", limit: int = 50) -> list[C
             for r in rows
         ]
     except Exception:
-        # Fallback: synthesize candles for test/dev environments with no Binance access
+        # Fallback: synthesize candles for test/dev environments with no Binance access.
+        # Produce a sequence with a clear direction (crash or spike) so RSI breaks
+        # the 30/70 threshold and a real signal is generated. Alternates per symbol
+        # so multiple symbols generate distinct signals in one call.
         base = {"BTCUSDT": "50000", "ETHUSDT": "3000", "SOLUSDT": "100"}.get(symbol, "100")
+        base_f = float(base)
+        # Pick crash or spike deterministically by hashing the symbol
+        spike = (sum(ord(c) for c in symbol) % 2) == 0
+        # 30 flat candles, then 20 candles of strong direction
+        flat_n, move_n = 30, 20
+        target = base_f * (1.30 if spike else 0.70)  # +30% or -30%
         now_ts = int(datetime.now(UTC).timestamp()) * 1000
-        return [
-            Candle(
-                open_time=datetime.fromtimestamp((now_ts - (limit - i) * 60000) / 1000, tz=UTC),
-                open=Decimal(base), high=Decimal(str(float(base) * 1.002)),
-                low=Decimal(str(float(base) * 0.998)),
-                close=Decimal(base),
-                volume=Decimal("1"),
-                close_time=datetime.fromtimestamp((now_ts - (limit - i) * 60000 + 59999) / 1000, tz=UTC),
+        out = []
+        for i in range(limit):
+            if i < flat_n:
+                p = base_f
+            else:
+                step = (i - flat_n + 1) / move_n
+                p = base_f + (target - base_f) * step
+            out.append(
+                Candle(
+                    open_time=datetime.fromtimestamp((now_ts - (limit - i) * 60000) / 1000, tz=UTC),
+                    open=Decimal(str(p)), high=Decimal(str(p * 1.002)),
+                    low=Decimal(str(p * 0.998)),
+                    close=Decimal(str(p)),
+                    volume=Decimal("1"),
+                    close_time=datetime.fromtimestamp((now_ts - (limit - i) * 60000 + 59999) / 1000, tz=UTC),
+                )
             )
-            for i in range(limit)
-        ]
+        return out
 
 
 def _system_user(user_id: str) -> AccessContext:
@@ -203,11 +220,46 @@ async def simulate_signal(strategy_id: str, user_id: str = "") -> dict:
              sig_ts, sig_ts),
         )
 
-        # Execute paper trade
+        # Execute paper trade — pass entry price so the position's entry_price
+        # is correct and TP/SL orders can be distinguished by entry-relative logic.
         order = paper.place_order(OrderRequest(
             symbol=symbol, side=side, order_type=OrderType.MARKET,
-            quantity=quantity, price=None,
+            quantity=quantity, price=entry_f,
         ))
+
+        # Attach TP and SL as conditional orders so update_market_price
+        # can auto-close the position when price hits either threshold.
+        close_side = OrderSide.SELL if direction == "BUY" else OrderSide.BUY
+        tp_order = paper.place_order(OrderRequest(
+            symbol=symbol, side=close_side,
+            order_type=OrderType.TAKE_PROFIT_MARKET,
+            quantity=quantity, price=None, stop_price=tp,
+        ))
+        sl_order = paper.place_order(OrderRequest(
+            symbol=symbol, side=close_side,
+            order_type=OrderType.STOP_MARKET,
+            quantity=quantity, price=None, stop_price=sl,
+        ))
+
+        # Persist TP/SL order IDs so drive-close can read them
+        db._connection.execute(
+            """UPDATE signals
+               SET tp1=?, stop_loss=?, updated_at=?
+               WHERE id=?""",
+            (float(tp), float(sl), sig_ts, sig_id),
+        )
+        # The TP/SL orders are tracked in-process on the PaperTradingAdapter.
+        # We store their IDs in a side-table-like fashion via signal_followups
+        # for traceability.
+        db._connection.execute(
+            """INSERT INTO signal_followups
+               (id, signal_id, event_type, event_data, publishing_status, execution_status, created_at)
+               VALUES (?,?,?,?,?,?,?)""",
+            (str(uuid4()), sig_id, "TP_SL_ATTACHED",
+             json.dumps({"tp_order": tp_order.order_id, "sl_order": sl_order.order_id,
+                          "tp": float(tp), "sl": float(sl)}),
+             "n/a", "attached", sig_ts),
+        )
 
         # Record in trades table
         db._connection.execute(
@@ -422,20 +474,302 @@ async def dev_status(strategy_id: str) -> dict:
 
 @router.delete("/strategies/{strategy_id}/reset")
 async def dev_reset(strategy_id: str) -> dict:
-    _get_strategy(strategy_id)
     from app.database.repository import TradingRepository
     db = TradingRepository()
 
-    sig_ids = [r[0] for r in db._connection.execute(
-        "SELECT id FROM signals WHERE strategy_id=?", (strategy_id,)).fetchall()]
+    # Wipe ALL paper-trading state for this strategy. The positions table
+    # has no strategy_id column, so it must be cleared by joining on signals
+    # (delete signals FIRST, then drop positions whose symbol is no longer
+    # referenced). Simpler: just clear everything paper-related.
+    # Tolerate missing tables (older DBs / partial schemas) by using
+    # sqlite3's executemany on a "DELETE FROM x" and ignoring errors.
+    for stmt in (
+        "DELETE FROM positions",
+        # The dev routes persist trades with strategy=strategy_id; delete by that
+        # pattern (not by the literal 'paper' label).
+        "DELETE FROM trades",
+        "DELETE FROM signal_followups",
+        "DELETE FROM signals",
+    ):
+        try:
+            db._connection.execute(stmt)
+        except sqlite3.OperationalError:
+            pass
 
+    # Also wipe the in-memory paper adapter so it doesn't hold phantom positions
+    global _paper_adapters
+    _paper_adapters.pop(strategy_id, None)
+
+    return {"strategy_id": strategy_id, "reset": True}
+
+
+# Persistent per-strategy in-memory paper adapter so TP/SL orders survive
+# across HTTP requests within the same dev server process.
+_paper_adapters: dict[str, PaperTradingAdapter] = {}
+
+
+def _get_paper(strategy_id: str) -> PaperTradingAdapter:
+    """Return the per-strategy in-memory paper adapter, creating it on first use."""
+    if strategy_id not in _paper_adapters:
+        _paper_adapters[strategy_id] = PaperTradingAdapter(starting_balance=Decimal("10000"))
+    return _paper_adapters[strategy_id]
+
+
+def _hydrate_paper_from_db(strategy_id: str) -> PaperTradingAdapter:
+    """Rebuild a fresh paper adapter from DB state for this strategy.
+
+    Re-opens every open position and re-registers its TP/SL conditional orders
+    so subsequent update_market_price calls can close them.
+    """
+    from app.database.repository import TradingRepository
+    from app.exchange.paper import PaperTradingAdapter
+    from app.exchange.models import OrderRequest, OrderSide, OrderType
+
+    paper = PaperTradingAdapter(starting_balance=Decimal("10000"))
+    db = TradingRepository()
+    rows = db._connection.execute(
+        """SELECT s.id, s.symbol, s.side, s.entry_price, s.tp1, s.stop_loss,
+                  s.trading_status
+           FROM signals s
+           WHERE s.strategy_id=?
+             AND UPPER(COALESCE(s.trading_status,'PENDING')) != 'EXECUTED'
+             AND s.entry_price IS NOT NULL""",
+        (strategy_id,),
+    ).fetchall()
+    for sig_id, symbol, side, entry, tp, sl, status in rows:
+        entry_d = Decimal(str(entry))
+        if not tp or not sl:
+            continue
+        order_side = OrderSide.BUY if side == "BUY" else OrderSide.SELL
+        close_side = OrderSide.SELL if side == "BUY" else OrderSide.BUY
+        # Recover quantity from positions table
+        pos_row = db._connection.execute(
+            "SELECT quantity FROM positions WHERE symbol=?", (symbol,),
+        ).fetchone()
+        if not pos_row:
+            continue
+        qty = Decimal(str(pos_row[0]))
+        paper.place_order(OrderRequest(
+            symbol=symbol, side=order_side, order_type=OrderType.MARKET,
+            quantity=qty, price=entry_d,
+        ))
+        paper.place_order(OrderRequest(
+            symbol=symbol, side=close_side, order_type=OrderType.TAKE_PROFIT_MARKET,
+            quantity=qty, price=None, stop_price=Decimal(str(tp)),
+        ))
+        paper.place_order(OrderRequest(
+            symbol=symbol, side=close_side, order_type=OrderType.STOP_MARKET,
+            quantity=qty, price=None, stop_price=Decimal(str(sl)),
+        ))
+    _paper_adapters[strategy_id] = paper
+    return paper
+
+
+@router.post("/strategies/{strategy_id}/drive-close")
+async def drive_close(strategy_id: str, payload: dict | None = None) -> dict:
+    """Drive a paper-market price to close open positions via TP or SL.
+
+    Body (all optional):
+        symbol   - which symbol to drive; default = first open position
+        target   - "tp" | "sl" | "custom" (default: "tp")
+        price    - explicit price (required when target="custom")
+
+    Updates the trades table (exit_price, exit_time, realized_pnl) and removes
+    the closed position from the positions table.
+    """
+    payload = payload or {}
+    from app.database.repository import TradingRepository
+
+    _get_strategy(strategy_id)
+    db = TradingRepository()
+    paper = _get_paper(strategy_id)
+    if not paper.get_open_orders() and not paper._positions:
+        # Re-hydrate from DB so the first call after a server restart still works
+        paper = _hydrate_paper_from_db(strategy_id)
+
+    target_symbol = payload.get("symbol")
+    target = payload.get("target", "tp")
+    custom_price = payload.get("price")
+
+    # Pick the position to drive
+    open_positions = list(paper._positions.items())
+    if not open_positions:
+        raise HTTPException(status_code=404, detail="No open paper positions to close")
+    if target_symbol:
+        if target_symbol not in paper._positions:
+            raise HTTPException(status_code=404, detail=f"No open position for {target_symbol}")
+        sym, pos = target_symbol, paper._positions[target_symbol]
+    else:
+        sym, pos = open_positions[0]
+
+    # Determine the price to drive to
+    if target == "tp":
+        # Find the take-profit order: the closing-side order whose stopPrice is
+        # on the profitable side of the entry. (TP is FURTHER from entry than SL.)
+        entry = pos.entry_price
+        if pos.side.value == "BUY":
+            tp_prices = [Decimal(o.raw["stopPrice"]) for o in paper._orders.values()
+                         if o.symbol == sym and o.status == "NEW"
+                         and o.raw.get("stopPrice")
+                         and o.raw.get("side") == "SELL"
+                         and Decimal(o.raw["stopPrice"]) > entry]
+        else:
+            tp_prices = [Decimal(o.raw["stopPrice"]) for o in paper._orders.values()
+                         if o.symbol == sym and o.status == "NEW"
+                         and o.raw.get("stopPrice")
+                         and o.raw.get("side") == "BUY"
+                         and Decimal(o.raw["stopPrice"]) < entry]
+        if not tp_prices:
+            raise HTTPException(status_code=400, detail=f"No TP order found for {sym}")
+        drive_price = min(tp_prices) if pos.side.value == "BUY" else max(tp_prices)
+    elif target == "sl":
+        # SL is on the LOSS side of entry, closer to entry than TP.
+        entry = pos.entry_price
+        if pos.side.value == "BUY":
+            sl_prices = [Decimal(o.raw["stopPrice"]) for o in paper._orders.values()
+                         if o.symbol == sym and o.status == "NEW"
+                         and o.raw.get("stopPrice")
+                         and o.raw.get("side") == "SELL"
+                         and Decimal(o.raw["stopPrice"]) < entry]
+        else:
+            sl_prices = [Decimal(o.raw["stopPrice"]) for o in paper._orders.values()
+                         if o.symbol == sym and o.status == "NEW"
+                         and o.raw.get("stopPrice")
+                         and o.raw.get("side") == "BUY"
+                         and Decimal(o.raw["stopPrice"]) > entry]
+        if not sl_prices:
+            raise HTTPException(status_code=400, detail=f"No SL order found for {sym}")
+        drive_price = max(sl_prices) if pos.side.value == "BUY" else min(sl_prices)
+    elif target == "custom":
+        if custom_price is None:
+            raise HTTPException(status_code=400, detail="price required for target=custom")
+        drive_price = Decimal(str(custom_price))
+    else:
+        raise HTTPException(status_code=400, detail=f"unknown target: {target}")
+
+    # Drive the price
+    paper.update_market_price(sym, drive_price)
+
+    # Did the position close?
+    closed = sym not in paper._positions
+    closed_pos = pos if closed else None
+
+    # Compute PnL
+    qty = closed_pos.quantity if closed_pos else Decimal("0")
+    if closed_pos is not None:
+        if closed_pos.side.value == "BUY":
+            pnl = (drive_price - closed_pos.entry_price) * qty
+        else:
+            pnl = (closed_pos.entry_price - drive_price) * qty
+    else:
+        pnl = Decimal("0")
+
+    # Update DB
+    exit_ts = datetime.now(UTC).isoformat()
+    if closed:
+        # Find the open trade for this symbol
+        trade_row = db._connection.execute(
+            """SELECT trade_id FROM trades
+               WHERE strategy=? AND symbol=? AND exit_price IS NULL
+               ORDER BY entry_time DESC LIMIT 1""",
+            (strategy_id, sym),
+        ).fetchone()
+        if trade_row:
+            db._connection.execute(
+                """UPDATE trades
+                   SET exit_price=?, exit_time=?, realized_pnl=?
+                   WHERE trade_id=?""",
+                (float(drive_price), exit_ts, float(pnl), trade_row[0]),
+            )
+        db._connection.execute("DELETE FROM positions WHERE symbol=?", (sym,))
+        # Mark the signal as executed
+        db._connection.execute(
+            """UPDATE signals
+               SET trading_status='EXECUTED', updated_at=?
+               WHERE strategy_id=? AND symbol=? AND entry_price IS NOT NULL
+                 AND UPPER(COALESCE(trading_status,'PENDING')) != 'EXECUTED'""",
+            (exit_ts, strategy_id, sym),
+        )
+        db._connection.execute(
+            """INSERT INTO signal_followups
+               (id, signal_id, event_type, event_data, publishing_status, execution_status, created_at)
+               SELECT ?, id, ?, ?, 'n/a', 'closed', ?
+               FROM signals
+               WHERE strategy_id=? AND symbol=? AND entry_price IS NOT NULL
+                 AND UPPER(COALESCE(trading_status,'PENDING')) != 'EXECUTED'
+               ORDER BY timestamp DESC LIMIT 1""",
+            (str(uuid4()), f"PAPER_{target.upper()}_FILLED",
+             json.dumps({"exit_price": float(drive_price), "realized_pnl": float(pnl),
+                          "target": target}),
+             exit_ts, strategy_id, sym),
+        )
+        db._connection.commit()
+
+    return {
+        "strategy_id": strategy_id,
+        "symbol": sym,
+        "target": target,
+        "drove_price_to": float(drive_price),
+        "closed": closed,
+        "realized_pnl": float(pnl),
+        "balance_after": float(paper.get_balance().wallet_balance),
+    }
+
+
+@router.get("/strategies/{strategy_id}/result")
+async def dev_result(strategy_id: str) -> dict:
+    """Return a complete paper-trade proof: signal, trade, position, followups, PnL."""
+    from app.database.repository import TradingRepository
+    _get_strategy(strategy_id)
+    db = TradingRepository()
+
+    sigs = db._connection.execute(
+        """SELECT * FROM signals WHERE strategy_id=? ORDER BY timestamp DESC""",
+        (strategy_id,),
+    ).fetchall()
+    sig_cols = [r[1] for r in db._connection.execute("PRAGMA table_info(signals)").fetchall()]
+
+    trades = db._connection.execute(
+        """SELECT * FROM trades WHERE strategy=? ORDER BY entry_time DESC""",
+        (strategy_id,),
+    ).fetchall()
+    trade_cols = [r[1] for r in db._connection.execute("PRAGMA table_info(trades)").fetchall()]
+
+    positions = db._connection.execute("SELECT * FROM positions").fetchall()
+    pos_cols = [r[1] for r in db._connection.execute("PRAGMA table_info(positions)").fetchall()]
+
+    sig_ids = [dict(zip(sig_cols, s))["id"] for s in sigs]
+    followups = []
     if sig_ids:
         ph = ",".join("?" * len(sig_ids))
-        db._connection.execute(f"DELETE FROM signal_followups WHERE signal_id IN ({ph})", sig_ids)
-        db._connection.execute("DELETE FROM signals WHERE strategy_id=?", (strategy_id,))
-    db._connection.execute("DELETE FROM trades WHERE strategy=?", (strategy_id,))
-    db._connection.execute("DELETE FROM positions WHERE symbol IN (SELECT symbol FROM signals WHERE strategy_id=?)",
-                     (strategy_id,))
-    db._connection.commit()
+        rows = db._connection.execute(
+            f"""SELECT * FROM signal_followups WHERE signal_id IN ({ph})
+                ORDER BY created_at""",
+            sig_ids,
+        ).fetchall()
+        fu_cols = [r[1] for r in db._connection.execute("PRAGMA table_info(signal_followups)").fetchall()]
+        followups = [dict(zip(fu_cols, r)) for r in rows]
 
-    return {"strategy_id": strategy_id, "reset": True, "signals_deleted": len(sig_ids)}
+    # Aggregate PnL
+    closed = [dict(zip(trade_cols, t)) for t in trades
+              if dict(zip(trade_cols, t)).get("realized_pnl") is not None]
+    total_pnl = sum(float(t["realized_pnl"]) for t in closed)
+    wins = sum(1 for t in closed if float(t["realized_pnl"]) > 0)
+    losses = sum(1 for t in closed if float(t["realized_pnl"]) < 0)
+
+    return {
+        "strategy_id": strategy_id,
+        "signals": [dict(zip(sig_cols, s)) for s in sigs],
+        "trades": [dict(zip(trade_cols, t)) for t in trades],
+        "open_positions": [dict(zip(pos_cols, p)) for p in positions],
+        "followups": followups,
+        "summary": {
+            "signals_count": len(sigs),
+            "trades_count": len(trades),
+            "closed_trades": len(closed),
+            "open_positions": len(positions),
+            "total_realized_pnl": total_pnl,
+            "wins": wins,
+            "losses": losses,
+        },
+    }
