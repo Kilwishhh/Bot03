@@ -123,3 +123,87 @@ def admin_risk_snapshot(
         if risk is not None and hasattr(risk, "snapshot"):
             snapshot["risk"] = risk.snapshot()
     return snapshot
+
+
+@router.post("/users/{user_id}/activate")
+def activate_user(
+    user_id: str,
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    from app.database.repository import get_default_repository
+    ctx.require_admin()
+    repo = get_default_repository()
+    repo._connection.execute("UPDATE users SET status='active' WHERE id=?", (user_id,))
+    return {"id": user_id, "status": "active"}
+
+
+@router.delete("/users/{user_id}")
+def delete_user(
+    user_id: str,
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    ctx.require_admin()
+    from app.database.repository import get_default_repository
+    repo = get_default_repository()
+    repo._connection.execute("DELETE FROM signal_followups WHERE signal_id IN (SELECT id FROM signals WHERE user_id=?)", (user_id,))
+    repo._connection.execute("DELETE FROM signals WHERE user_id=?", (user_id,))
+    repo._connection.execute("DELETE FROM users WHERE id=?", (user_id,))
+    return {"id": user_id, "deleted": True}
+
+
+@router.get("/strategies/{strategy_id}")
+def get_strategy(
+    strategy_id: str,
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    from app.services.strategy_service import StrategyService
+    ctx.require_admin()
+    svc = StrategyService()
+    strategies = svc.list_all(ctx)
+    for s in strategies:
+        if s.id == strategy_id:
+            return {"id": s.id, "user_id": s.user_id, "name": s.name,
+                    "lifecycle_state": s.lifecycle_state.value,
+                    "execution_mode": s.execution_mode.value,
+                    "market": s.market, "updated_at": s.updated_at.isoformat()}
+    raise HTTPException(status_code=404, detail="Strategy not found")
+
+
+@router.get("/control")
+def admin_control(
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    ctx.require_admin()
+    from app.api.control import _controller
+    from app.database.repository import get_default_repository
+    repo = get_default_repository()
+    state = repo.control_state()
+    return {
+        "state": state[0] if state else "stopped",
+        "bot_running": _controller.get("thread") is not None and _controller["thread"].is_alive(),
+        "paused": _controller.get("paused", False),
+    }
+
+
+@router.post("/control/{action}")
+def admin_control_action(
+    action: str,
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    ctx.require_admin()
+    from app.api.control import _controller
+    from app.database.repository import get_default_repository
+    repo = get_default_repository()
+    if action == "stop":
+        _controller["stop"] = True
+        repo.set_control_state("stopped")
+        return {"action": "stop", "state": "stopped"}
+    if action == "pause":
+        _controller["paused"] = True
+        repo.set_control_state("paused")
+        return {"action": "pause", "state": "paused"}
+    if action == "resume":
+        _controller["paused"] = False
+        repo.set_control_state("running")
+        return {"action": "resume", "state": "running"}
+    raise HTTPException(status_code=400, detail=f"unknown action: {action}")
