@@ -103,3 +103,23 @@ def admin_system_health(
         return svc.check_all(ctx)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk")
+def admin_risk_snapshot(
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    """Return current risk-manager state for the live bot, if any."""
+    from app.api.control import _controller
+    ctx.require_admin()
+    snapshot = {
+        "bot_running": _controller.get("thread") is not None and _controller["thread"].is_alive()
+                       if _controller.get("thread") else False,
+        "risk": None,
+    }
+    runner = _controller.get("runner")
+    if runner is not None and hasattr(runner, "cycle") and hasattr(runner.cycle, "orders"):
+        risk = getattr(runner.cycle.orders, "risk", None)
+        if risk is not None and hasattr(risk, "snapshot"):
+            snapshot["risk"] = risk.snapshot()
+    return snapshot

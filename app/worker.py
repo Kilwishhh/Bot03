@@ -25,7 +25,7 @@ def build_runner(settings: Settings, repository: TradingRepository) -> BotRunner
         SignalEngine(create_strategy(settings)),
         OrderManager(
             exchange,
-            RiskManager(Decimal(str(settings.max_daily_loss)), settings.max_open_positions, Decimal(str(settings.min_signal_confidence)), settings.max_leverage, Decimal(str(settings.max_exposure)), settings.max_consecutive_losses),
+            RiskManager(Decimal(str(settings.max_daily_loss)), settings.max_open_positions, Decimal(str(settings.min_signal_confidence)), settings.max_leverage, Decimal(str(settings.max_exposure)), settings.max_consecutive_losses, Decimal(str(settings.max_drawdown_pct))),
             PositionSizer(Decimal(str(settings.risk_per_trade))),
         ),
         repository,

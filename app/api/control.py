@@ -157,6 +157,7 @@ def control_start(
                 int(paper.get("max_leverage", 10)),
                 Decimal(str(settings.max_exposure)),
                 settings.max_consecutive_losses,
+                Decimal(str(paper.get("max_drawdown_pct", "0.15"))),
             ),
             PositionSizer(Decimal(str(paper.get("risk_per_trade", 0.01)))),
         ),

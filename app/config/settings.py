@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     max_leverage: int = Field(default=5, ge=1)
     max_exposure: float = Field(default=1000, gt=0)
     max_consecutive_losses: int = Field(default=3, ge=1)
+    max_drawdown_pct: float = Field(default=0.15, gt=0, le=1)
     min_signal_confidence: float = Field(default=0.70, ge=0, le=1)
     # Paper-trading controls
     paper_starting_balance: float = Field(default=10000.0, gt=0)
