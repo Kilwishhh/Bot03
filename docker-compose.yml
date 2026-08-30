@@ -1,44 +1,125 @@
+# Modular monolith stack: FastAPI backend + worker + SQLite + Redis
+#
+# Commands:
+#   docker compose build
+#   docker compose up -d
+#   docker compose ps
+#   docker compose logs -f
+#   docker compose logs -f backend
+#   docker compose restart worker
+#   docker compose down
+#
+# Optional dashboard (streamlit):
+#   docker compose --profile dashboard up -d
+
 services:
-  api:
-    build: .
+  # ── Database (SQLite, persistent) ──────────────────────────────────────────
+  db:
+    image: alpine:latest
+    container_name: mktrader_db_volume
+    volumes:
+      - sqlite_data:/app/data
+    restart: unless-stopped
+
+  # ── Redis (optional, for future pub/sub and job queue) ──────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: mktrader_redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - redis_data:/data
+
+  # ── Backend API server ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mktrader_backend
+    restart: unless-stopped
     env_file:
       - .env
     environment:
-      TRADING_MODE: paper
-    command: python -m uvicorn app.api.server:app --host 0.0.0.0 --port 8000
+      TRADING_MODE: ${APP_ENV:-paper}
+      DATABASE_PATH: /app/data/trading.db
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     ports:
       - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_started
+    volumes:
+      - sqlite_data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
       interval: 30s
       timeout: 10s
       retries: 5
-    volumes:
-      - trading_data:/app/data
+      start_period: 15s
+    command: >
+      python -m uvicorn app.api.server:app
+      --host 0.0.0.0
+      --port 8000
+      --timeout-keep-alive 30
 
-  bot:
-    build: .
+  # ── Worker (trading bot runner) ────────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mktrader_worker
+    restart: unless-stopped
     env_file:
       - .env
     environment:
-      TRADING_MODE: paper
-    command: python -m app.worker
+      TRADING_MODE: ${APP_ENV:-paper}
+      DATABASE_PATH: /app/data/trading.db
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     depends_on:
-      - api
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_started
+      backend:
+        condition: service_healthy
     volumes:
-      - trading_data:/app/data
+      - sqlite_data:/app/data
+    command: python -m app.worker
 
+  # ── Streamlit dashboard (optional) ─────────────────────────────────────────
   dashboard:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mktrader_dashboard
+    restart: unless-stopped
     env_file:
       - .env
     environment:
-      TRADING_MODE: paper
-    command: python -m streamlit run app/dashboard/streamlit_app.py --server.address=0.0.0.0
-    ports:
-      - "8501:8501"
+      DATABASE_PATH: /app/data/trading.db
     profiles:
       - dashboard
+    ports:
+      - "8501:8501"
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - sqlite_data:/app/data
+    command: >
+      python -m streamlit run app/dashboard/streamlit_app.py
+      --server.address=0.0.0.0
+      --server.port=8501
 
 volumes:
-  trading_data:
+  sqlite_data:
+    name: mktrader_sqlite_data
+  redis_data:
+    name: mktrader_redis_data
