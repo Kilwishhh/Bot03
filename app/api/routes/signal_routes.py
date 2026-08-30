@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api.dependencies import get_access_context
 from app.core.errors import NotFoundError
 from app.core.rbac import AccessContext
-from app.domain.signal import PublishStatus, SignalStatus, TradingStatus
+from app.domain.signal import SignalStatus
 
 router = APIRouter(prefix="/signals", tags=["signals"])
 
@@ -28,8 +28,8 @@ def create_signal(
     ctx: AccessContext = Depends(get_access_context),
 ):
     from app.domain.signal import Signal
-    from app.signals.models import SignalSide
     from app.services.signal_service import SignalService
+    from app.signals.models import SignalSide
     svc = SignalService()
     try:
         side = SignalSide(payload.get("side", "HOLD"))
@@ -63,9 +63,9 @@ def get_signal(
     signal_id: str,
     ctx: AccessContext = Depends(get_access_context),
 ):
-    from app.services.signal_service import SignalService
-    from app.database import TradingRepository
     from app.config import Settings
+    from app.database import TradingRepository
+    from app.services.signal_service import SignalService
     svc = SignalService()
     try:
         sig = svc.get(signal_id, ctx)

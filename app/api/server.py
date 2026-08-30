@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -65,13 +66,21 @@ except Exception:
 
 # include ermis API routes (all scoped under /auth, /admin, /strategies, etc.)
 try:
-    from app.api.routes import (
-        admin_routes, config_routes, dev_routes, user_routes, strategy_routes,
-        signal_routes, followup_routes, automation_routes,
-        connection_routes, publishing_routes, health_routes,
-        emergency_routes,
-    )
     from app.api.admin_spa import router as admin_spa_router
+    from app.api.routes import (
+        admin_routes,
+        automation_routes,
+        config_routes,
+        connection_routes,
+        dev_routes,
+        emergency_routes,
+        followup_routes,
+        health_routes,
+        publishing_routes,
+        signal_routes,
+        strategy_routes,
+        user_routes,
+    )
 
     app.include_router(admin_spa_router)
     app.include_router(admin_routes.router)

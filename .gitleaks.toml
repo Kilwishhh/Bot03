@@ -1,0 +1,45 @@
+# Gitleaks configuration — scanned on every commit via CI and pre-commit.
+
+[allowlist]
+description = "Allowlisted paths for this repo"
+paths = [
+  ".env.example",
+  ".gitleaks.toml",
+  "docs/",
+  "scripts/release_check.py",
+]
+
+[[rules]]
+id = "binance-api-key"
+description = "Binance API Key"
+regex = '''(?i)(binance[_\-]?api[_\-]?key)\s*[=:]\s*["']?[A-Za-z0-9+/]{32,64}["']?'''
+
+[[rules]]
+id = "jwt-token"
+description = "JWT token"
+regex = '''(?i)(jwt|token)\s*[=:]\s*["']?eyJ[A-Za-z0-9+/=_.-]{20,}["']?'''
+
+[[rules]]
+id = "telegram-bot-token"
+description = "Telegram Bot Token"
+regex = '''(?i)(telegram[_\-]?bot[_\-]?token)\s*[=:]\s*["']?\d{8,10}:[A-Za-z0-9_-]{35}["']?'''
+
+[[rules]]
+id = "pem-private-key"
+description = "PEM-encoded private key"
+regex = '-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'
+
+[[rules]]
+id = "aws-access-key"
+description = "AWS Access Key ID"
+regex = '''(?i)(aws[_\-]?access[_\-]?key[_\-]?id)\s*[=:]\s*["']?AKIA[0-9A-Z]{16}["']?'''
+
+[[rules]]
+id = "github-token"
+description = "GitHub Personal Access Token"
+regex = 'gh[pousr]_[A-Za-z0-9_]{36,}'
+
+[[rules]]
+id = "connection-string-with-password"
+description = "Connection string with password"
+regex = '''(?i)(postgresql|mysql|redis|mongodb)\+[^\s]+://[^:]+:[^@]+@'''

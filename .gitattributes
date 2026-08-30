@@ -1,0 +1,50 @@
+# Auto detect text files and perform LF normalization on commit.
+# Prevents CRLF pollution on Windows and ensures consistent line endings across OSes.
+* text=auto
+
+# Explicit binary file types — never touch these.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary
+*.tar  binary
+*.gz   binary
+*.db   binary
+*.sqlite binary
+*.sqlite3 binary
+*.whl  binary
+*.apk  binary
+*.ttf  binary
+*.otf  binary
+*.woff binary
+*.woff2 binary
+*.mp4  binary
+*.mp3  binary
+*.wav  binary
+*.ico  binary
+
+# Python source — always LF on all platforms.
+*.py text eol=lf
+
+# Shell scripts — always LF.
+*.sh text eol=lf
+
+# YAML / TOML / JSON / Markdown — always LF.
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Dockerfiles — always LF.
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+
+# Makefiles — always LF.
+Makefile text eol=lf
+
+# Editors config — always LF.
+.editorconfig text eol=lf

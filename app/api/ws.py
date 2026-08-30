@@ -1,7 +1,6 @@
 """WebSocket endpoint — fan-out subscriber for real-time bot events."""
 import asyncio
 import contextlib
-import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -53,7 +52,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_text(encode(event))
                 if event.get("type") == "ping":
                     last_ping = asyncio.get_event_loop().time()
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Keepalive ping every 30s
                 await websocket.send_text(encode({"type": "ping"}))
                 last_ping = asyncio.get_event_loop().time()

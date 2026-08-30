@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 CONFIG_FILE = Path(__file__).resolve().parent.parent.parent / "paper_config.json"

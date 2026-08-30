@@ -1,0 +1,50 @@
+# Pre-commit hooks — run `pre-commit install` to activate.
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+# Update versions: pre-commit autoupdate
+
+repos:
+  # ── Standardised formatting ──────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=512']
+      - id: check-case-conflict       # files that differ only in case (breaks cross-OS)
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: detect-aws-credentials
+        files: '\.env(\.\w+)?$'
+      - id: detect-private-key        # fail if any file matches the OpenSSH private key pattern
+
+  # ── Ruff (lint + format) — replaces isort, black, flake8, pyupgrade ──────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+        # Auto-fixes many issues. Remaining failures block the commit.
+
+  # ── Python syntax + shadow variable check ─────────────────────────────────
+  - repo: https://github.com/PyCQA/pygrep-hooks
+    rev: v1.5.2
+    hooks:
+      - id: python-use-type-annotations   # enforce `from __future__ import annotations`
+      - id: python-check-blanket-noqa      # reject `# noqa` without a code (e.g. `# noqa` → `# noqa: F401`)
+
+  # ── Secret scanning (local gitleaks) ─────────────────────────────────────
+  # Requires: brew install gitleaks  (macOS/Linux)
+  # Windows: download from https://github.com/gitleaks/gitleaks/releases
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: Detect secrets in staged changes
+        entry: gitleaks detect --staged --no-git
+        language: system
+        pass_filenames: true
+        stages: [commit]

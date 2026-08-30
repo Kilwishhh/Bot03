@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
 from datetime import UTC, datetime
@@ -12,7 +11,10 @@ from app.core import errors
 from app.core.audit import record
 from app.core.rbac import AccessContext
 from app.domain.signal import (
-    PublishStatus, Signal, SignalStatus, TradingStatus,
+    PublishStatus,
+    Signal,
+    SignalStatus,
+    TradingStatus,
 )
 from app.signals.models import Signal as _LegacySignal
 

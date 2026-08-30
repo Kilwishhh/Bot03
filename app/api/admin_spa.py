@@ -3,16 +3,8 @@
 Uses the same auth as the user UI but with admin role.
 """
 
-import os
-import json
-import time
-import secrets
-from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, FileResponse, Response
-
-from app.api.dependencies import get_access_context
-from app.core.rbac import AccessContext
+from fastapi import APIRouter
+from fastapi.responses import HTMLResponse
 
 router = APIRouter()
 

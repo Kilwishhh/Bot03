@@ -15,7 +15,6 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from app.core.errors import ForbiddenError
 from app.domain.user import User
 
 logger = logging.getLogger(__name__)

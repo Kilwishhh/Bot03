@@ -27,7 +27,6 @@ def pause(
     ctx: AccessContext = Depends(get_access_context),
 ):
     from app.services.emergency_service import EmergencyService
-    from app.domain.connection import EmergencyScope
     svc = EmergencyService()
     try:
         scope = payload.get("scope", EmergencyScope.USER.value)

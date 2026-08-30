@@ -13,7 +13,6 @@ import os
 import secrets
 from datetime import UTC, datetime, timedelta
 
-
 _PBKDF2_ITERATIONS = 200_000
 _PBKDF2_ALGO = "sha256"
 _SALT_BYTES = 16

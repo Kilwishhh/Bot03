@@ -11,10 +11,12 @@ from typing import Any
 
 from app.core import errors
 from app.core.audit import record
-from app.core.crypto import decrypt, encrypt
+from app.core.crypto import encrypt
 from app.core.rbac import AccessContext
 from app.domain.connection import (
-    ConnectionStatus, ConnectionVenue, ExchangeConnection,
+    ConnectionStatus,
+    ConnectionVenue,
+    ExchangeConnection,
 )
 
 

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 from app.core import errors
 from app.core.audit import record

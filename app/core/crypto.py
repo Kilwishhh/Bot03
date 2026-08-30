@@ -37,7 +37,8 @@ def _cipher():
     from cryptography.fernet import Fernet
     raw = _load_or_create_key()
     # Fernet needs 32 url-safe-base64 bytes (44 chars total)
-    import base64, hashlib
+    import base64
+    import hashlib
     if len(raw) == 44:
         key = raw
     else:

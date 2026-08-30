@@ -1,6 +1,6 @@
 """Dev/test simulation routes — STRATEGY-TEST-001."""
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -284,9 +284,13 @@ async def simulate_signal(strategy_id: str, user_id: str = "") -> dict:
 @router.post("/signals/{signal_id}/paper-trade")
 async def paper_trade_existing_signal(signal_id: str) -> dict:
     """Execute a paper trade against an existing signal (admin manual trigger)."""
-    from datetime import UTC, datetime as _dt
+    from datetime import UTC
+    from datetime import datetime as _dt
+
+    from app.exchange.models import OrderRequest as _OR
+    from app.exchange.models import OrderSide as _OS
+    from app.exchange.models import OrderType as _OT
     from app.exchange.paper import PaperTradingAdapter as _Paper
-    from app.exchange.models import OrderRequest as _OR, OrderSide as _OS, OrderType as _OT
 
     db = TradingRepository()
     row = db._connection.execute(
@@ -346,9 +350,11 @@ async def paper_trade_existing_signal(signal_id: str) -> dict:
     db._connection.commit()
 
     try:
-        from app.services.automation_engine import AutomationEngine
         from app.core.rbac import AccessContext as _AC
-        from app.domain.user import User as _U, UserRole as _UR, UserStatus as _US
+        from app.domain.user import User as _U
+        from app.domain.user import UserRole as _UR
+        from app.domain.user import UserStatus as _US
+        from app.services.automation_engine import AutomationEngine
         if user_id:
             from app.database.repository import TradingRepository as _TR
             repo = _TR()
@@ -426,7 +432,7 @@ async def dev_reset(strategy_id: str) -> dict:
     if sig_ids:
         ph = ",".join("?" * len(sig_ids))
         db._connection.execute(f"DELETE FROM signal_followups WHERE signal_id IN ({ph})", sig_ids)
-        db._connection.execute(f"DELETE FROM signals WHERE strategy_id=?", (strategy_id,))
+        db._connection.execute("DELETE FROM signals WHERE strategy_id=?", (strategy_id,))
     db._connection.execute("DELETE FROM trades WHERE strategy=?", (strategy_id,))
     db._connection.execute("DELETE FROM positions WHERE symbol IN (SELECT symbol FROM signals WHERE strategy_id=?)",
                      (strategy_id,))

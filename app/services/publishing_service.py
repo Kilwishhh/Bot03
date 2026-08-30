@@ -10,11 +10,9 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from app.core import errors
 from app.core.audit import record
 from app.core.crypto import decrypt, encrypt
 from app.core.rbac import AccessContext
-from app.domain.connection import Publication, PublicationChannel, PublicationStatus, SquareLimitBehavior
 
 logger = logging.getLogger(__name__)
 

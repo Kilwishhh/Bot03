@@ -10,9 +10,9 @@ Tries in order:
 from __future__ import annotations
 
 import os
+
 from fastapi import Header, HTTPException, status
 
-from app.core.errors import ForbiddenError, UnauthorizedError
 from app.domain.user import User, UserRole, UserStatus
 
 
@@ -35,7 +35,7 @@ async def get_access_context(
     authorization: str | None = Header(None, alias="Authorization"),
     x_admin_token: str | None = Header(None, alias="X-Admin-Token"),
     x_control_token: str | None = Header(None, alias="X-Control-Token"),
-) -> "AccessContext":
+) -> AccessContext:
     """Resolve the current request's identity into an AccessContext."""
     from app.core.rbac import AccessContext
     from app.services.user_service import UserService
@@ -77,7 +77,7 @@ async def get_optional_context(
     authorization: str | None = Header(None, alias="Authorization"),
     x_admin_token: str | None = Header(None, alias="X-Admin-Token"),
     x_control_token: str | None = Header(None, alias="X-Control-Token"),
-) -> "AccessContext | None":
+) -> AccessContext | None:
     """Like get_access_context but returns None instead of 401 when unauthenticated."""
     try:
         return await get_access_context(authorization, x_admin_token, x_control_token)

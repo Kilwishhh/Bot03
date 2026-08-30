@@ -6,13 +6,10 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 
-from app.core.rbac import AccessContext
-from app.database.repository import TradingRepository
-from app.domain.user import User, UserRole, UserStatus
 from app.exchange.models import Candle, OrderRequest, OrderSide, OrderType
 from app.exchange.paper import PaperTradingAdapter
-from fastapi.testclient import TestClient
 
 client = TestClient(__import__("app.api.server", fromlist=["app"]).app,
                     raise_server_exceptions=True)

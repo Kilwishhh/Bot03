@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import json
-from dataclasses import asdict
 from datetime import UTC, datetime
 
 from app.core import errors
 from app.core.audit import record
 from app.core.rbac import AccessContext
 from app.domain.strategy import (
-    ExecutionMode, ExecutionVenue, LifecycleEvent, LifecycleState,
-    Strategy, StrategyVersion, is_valid_transition,
+    LifecycleState,
+    Strategy,
 )
 from app.services.strategy_service import StrategyService
-
 
 # LIVE requires all of these checks to pass
 LIVE_REQUIREMENTS = {
@@ -129,7 +126,7 @@ class StrategyLifecycle:
         )
         record(
             actor=ctx.user,
-            action=f"lifecycle.transition",
+            action="lifecycle.transition",
             target_type="strategy",
             target_id=strategy.id,
             detail={

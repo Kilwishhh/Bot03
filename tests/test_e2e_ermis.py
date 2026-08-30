@@ -14,14 +14,12 @@ Exercises:
 
 import json
 import os
-import shutil
-import sqlite3
 import sys
 import tempfile
 import threading
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 # Use a temporary DB so we don't touch the real one
@@ -36,21 +34,24 @@ os.environ["DATABASE_PATH"] = str(TMP_DB)
 os.environ["ENABLE_REMOTE_CONTROL"] = "true"
 
 import uvicorn
+
 from app.api.server import app
 
 # Force-recreate default repository against TMP_DB
 from app.database import repository as _repo_mod
+
 _repo_mod._default_repo = None
 from app.database.repository import TradingRepository
+
 _default = TradingRepository(str(TMP_DB))
 _repo_mod._default_repo = _default
 
 # Force-recreate services that already have a singleton
-import app.services.strategy_service as _ss
-import app.services.signal_service as _sigs
 import app.services.automation_engine as _ae
-import app.services.user_service as _us
 import app.services.emergency_service as _es
+import app.services.signal_service as _sigs
+import app.services.strategy_service as _ss
+import app.services.user_service as _us
 
 _ss._svc = None
 _sigs._svc = None
@@ -321,7 +322,7 @@ def main():
         step("GET /emergency/status")
         s, body = get("/emergency/status", admin_token=True)
         expect(s == 200, f"emergency status={s}")
-        expect(any(p["id"] == pause_id for p in body), f"pause in active list")
+        expect(any(p["id"] == pause_id for p in body), "pause in active list")
 
         step("POST /emergency/resume/{id}")
         s, body = post(f"/emergency/resume/{pause_id}", {}, admin_token=True)
@@ -337,21 +338,21 @@ def main():
         other_id = body["id"]
 
         s, body = post("/auth/login", {"email": "other@example.com", "password": "secret123"})
-        expect(s == 200, f"login other")
+        expect(s == 200, "login other")
         other_token = body["token"]
 
         step("Other user lists strategies — should NOT see trader's")
         s, body = get("/strategies", token=other_token)
         expect(s == 200, f"other list status={s}")
         other_strat_ids = {x["id"] for x in body}
-        expect(sid not in other_strat_ids, f"isolation: trader's strategy visible to other user!")
+        expect(sid not in other_strat_ids, "isolation: trader's strategy visible to other user!")
 
         # ── 9. Cleanup ───────────────────────────────────────────
         banner("9. Cleanup")
         step(f"DELETE /strategies/{sid}")
         s, body = post(f"/strategies/{sid}/transition", {"target_state": "STOPPED"}, token=token)
         # trader is suspended; admin should be able to delete
-        s, body = post(f"/admin/strategies", {}, admin_token=True)  # dummy, just to log
+        s, body = post("/admin/strategies", {}, admin_token=True)  # dummy, just to log
         # Direct delete via API
         req = urllib.request.Request(
             f"http://127.0.0.1:18000/strategies/{sid}", method="DELETE",

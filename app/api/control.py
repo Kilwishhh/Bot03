@@ -45,25 +45,6 @@ async def _check_control_allowed(
 
 
 require_control_token = _check_control_allowed
-from app.api.routes.config_routes import get_paper_config
-from app.api.ws_broker import publish_event
-from app.config import Settings
-from app.database import TradingRepository
-from app.exchange import create_exchange
-from app.execution import OrderManager
-from app.market_data import AdapterMarketDataProvider
-from app.notifications import (
-    BinanceSquarePoster,
-    CompositePublisher,
-    DeduplicatingPublisher,
-    FlushingPublisher,
-    TelegramNotifier,
-    TelegramSignalPublisher,
-)
-from app.risk import PositionSizer, RiskManager
-from app.runtime import BotRunner, TradingCycle
-from app.signals import SignalEngine
-from app.strategy import create_strategy
 
 
 def _build_publisher(settings):

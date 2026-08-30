@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.dependencies import get_access_context
 from app.core.errors import (
-    ConflictError, ForbiddenError, LifecycleError, LiveDeploymentError, NotFoundError,
+    ConflictError,
+    ForbiddenError,
+    LifecycleError,
+    LiveDeploymentError,
+    NotFoundError,
 )
 from app.core.rbac import AccessContext
 from app.domain.strategy import LifecycleState
@@ -127,8 +131,8 @@ def transition_strategy(
     payload: dict,
     ctx: AccessContext = Depends(get_access_context),
 ):
-    from app.services.strategy_service import StrategyService
     from app.services.strategy_lifecycle import StrategyLifecycle
+    from app.services.strategy_service import StrategyService
     svc = StrategyService()
     lifecycle = StrategyLifecycle(svc)
     try:

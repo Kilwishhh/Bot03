@@ -18,8 +18,11 @@ from typing import Any
 from app.core import errors
 from app.core.rbac import AccessContext
 from app.domain.automation import (
-    AutomationAction, AutomationActionType, AutomationCondition,
-    AutomationEvent, AutomationEventStatus, AutomationRule, AutomationTrigger,
+    AutomationAction,
+    AutomationActionType,
+    AutomationCondition,
+    AutomationRule,
+    AutomationTrigger,
 )
 
 logger = logging.getLogger(__name__)
@@ -202,7 +205,6 @@ class AutomationEngine:
     def _run_action(self, action: AutomationAction, signal_id: str | None,
                    followup_id: str | None, ctx: AccessContext) -> dict:
         from app.services.publishing_service import PublishingService
-        from app.services.signal_service import SignalService
         svc = PublishingService(db_path=self._db_path)
 
         match action.type:

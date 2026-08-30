@@ -1,12 +1,13 @@
 """Signal domain entities — extends the existing Signal model."""
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
-import uuid
 
-from app.signals.models import Signal as _LegacySignal, SignalSide
+from app.signals.models import Signal as _LegacySignal
+from app.signals.models import SignalSide
 
 
 class SignalStatus(StrEnum):

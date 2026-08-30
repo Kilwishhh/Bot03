@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.dependencies import get_access_context
 from app.core.errors import (
-    ConflictError, ForbiddenError, NotFoundError, UnauthorizedError,
+    ConflictError,
+    ForbiddenError,
+    UnauthorizedError,
 )
 from app.core.rbac import AccessContext
-from app.api.dependencies import get_access_context
 
 router = APIRouter(tags=["auth"])
 
@@ -81,8 +83,8 @@ def me(ctx: AccessContext = Depends(get_access_context)):
 @router.get("/dashboard")
 def user_dashboard(ctx: AccessContext = Depends(get_access_context)):
     """Summary: open positions, recent trades, daily PnL, active signals count."""
-    from app.database import TradingRepository
     from app.config import Settings
+    from app.database import TradingRepository
     repo = TradingRepository(Settings().database_path)
     try:
         uid = ctx.user.id
@@ -130,8 +132,8 @@ def user_trades(
     limit: int = 20,
     ctx: AccessContext = Depends(get_access_context),
 ):
-    from app.database import TradingRepository
     from app.config import Settings
+    from app.database import TradingRepository
     repo = TradingRepository(Settings().database_path)
     try:
         keys = ("trade_id","symbol","side","quantity","entry_price","exit_price","realized_pnl","fees","strategy","entry_time","exit_time")

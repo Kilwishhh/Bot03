@@ -25,13 +25,16 @@ from app.core.auth import hash_password
 from app.core.rbac import AccessContext
 from app.domain.connection import SquareLimitBehavior
 from app.domain.strategy import (
-    EntryConfig, ExitConfig, ExecutionMode, ExecutionVenue, LifecycleState,
-    RiskConfig, Timeframe,
+    EntryConfig,
+    ExecutionMode,
+    ExecutionVenue,
+    ExitConfig,
+    LifecycleState,
+    RiskConfig,
+    Timeframe,
 )
 from app.domain.user import User, UserRole, UserStatus
-from app.services.publishing_service import PublishingService
 from app.services.strategy_service import StrategyService
-
 
 TEST_EMAIL = "test@local.dev"
 TEST_PASSWORD = "testpass123"
