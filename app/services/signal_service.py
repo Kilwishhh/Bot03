@@ -17,6 +17,15 @@ from app.domain.signal import (
 from app.signals.models import Signal as _LegacySignal
 
 
+def _enum_or(enum_cls, value: str | None, default):
+    if value is None:
+        return default
+    try:
+        return enum_cls(value)
+    except ValueError:
+        return default
+
+
 class SignalService:
     def __init__(self, db_path: str = "trading.db") -> None:
         self._db_path = db_path
@@ -137,30 +146,34 @@ class SignalService:
             conn.close()
 
     def _row_to_signal(self, row: tuple) -> Signal:
-        cols = ["id","user_id","strategy_id","symbol","side","confidence",
-                "entry_price","tp1","tp2","stop_loss","mode","signal_status",
-                "trading_status","telegram_status","square_status","timestamp",
-                "reason","strategy","created_at","updated_at"]
-        d = dict(zip(cols, row))
+        cols = self._signal_columns()
+        d = dict(zip(cols, row, strict=False))
         return Signal(
-            id=d["id"] or "",
-            user_id=d["user_id"] or "system",
-            strategy_id=d["strategy_id"],
-            symbol=d["symbol"] or "",
-            side=d["side"] or "HOLD",
-            confidence=float(d["confidence"] or 0),
-            entry_price=float(d["entry_price"]) if d["entry_price"] else None,
-            tp1=float(d["tp1"]) if d["tp1"] else None,
-            tp2=float(d["tp2"]) if d["tp2"] else None,
-            stop_loss=float(d["stop_loss"]) if d["stop_loss"] else None,
-            mode=d["mode"] or "paper",
-            signal_status=SignalStatus(d["signal_status"]) if d["signal_status"] else SignalStatus.ACTIVE,
-            trading_status=TradingStatus(d["trading_status"]) if d["trading_status"] else TradingStatus.PENDING,
-            telegram_status=PublishStatus(d["telegram_status"]) if d["telegram_status"] else PublishStatus.PENDING,
-            square_status=PublishStatus(d["square_status"]) if d["square_status"] else PublishStatus.PENDING,
-            timestamp=datetime.fromisoformat(d["timestamp"]) if d["timestamp"] else datetime.now(UTC),
-            reason=[r.strip() for r in d["reason"].split(";")] if d["reason"] else [],
-            strategy_name=d["strategy"] or "unknown",
-            created_at=datetime.fromisoformat(d["created_at"]) if d["created_at"] else datetime.now(UTC),
-            updated_at=datetime.fromisoformat(d["updated_at"]) if d["updated_at"] else datetime.now(UTC),
+            id=d.get("id") or "",
+            user_id=d.get("user_id") or "system",
+            strategy_id=d.get("strategy_id"),
+            symbol=d.get("symbol") or "",
+            side=d.get("side") or "HOLD",
+            confidence=float(d.get("confidence") or 0),
+            entry_price=float(d["entry_price"]) if d.get("entry_price") else None,
+            tp1=float(d["tp1"]) if d.get("tp1") else None,
+            tp2=float(d["tp2"]) if d.get("tp2") else None,
+            stop_loss=float(d["stop_loss"]) if d.get("stop_loss") else None,
+            mode=d.get("mode") or "paper",
+            signal_status=_enum_or(SignalStatus, d.get("signal_status"), SignalStatus.ACTIVE),
+            trading_status=_enum_or(TradingStatus, d.get("trading_status"), TradingStatus.PENDING),
+            telegram_status=_enum_or(PublishStatus, d.get("telegram_status"), PublishStatus.PENDING),
+            square_status=_enum_or(PublishStatus, d.get("square_status"), PublishStatus.PENDING),
+            timestamp=datetime.fromisoformat(d["timestamp"]) if d.get("timestamp") else datetime.now(UTC),
+            reason=[r.strip() for r in d["reason"].split(";")] if d.get("reason") else [],
+            strategy_name=d.get("strategy") or "unknown",
+            created_at=datetime.fromisoformat(d["created_at"]) if d.get("created_at") else datetime.now(UTC),
+            updated_at=datetime.fromisoformat(d["updated_at"]) if d.get("updated_at") else datetime.now(UTC),
         )
+
+    def _signal_columns(self) -> list[str]:
+        conn = self._conn()
+        try:
+            return [r[1] for r in conn.execute("PRAGMA table_info(signals)").fetchall()]
+        finally:
+            conn.close()

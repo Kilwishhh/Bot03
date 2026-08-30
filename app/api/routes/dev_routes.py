@@ -339,7 +339,7 @@ async def paper_trade_existing_signal(signal_id: str) -> dict:
     )
     db._connection.execute(
         """UPDATE signals
-           SET trading_status='EXECUTED', signal_status='EXECUTED', updated_at=?
+           SET trading_status='EXECUTED', updated_at=?
            WHERE UPPER(COALESCE(trading_status,'PENDING')) != 'EXECUTED'
            AND id=?""", (now, signal_id),
     )

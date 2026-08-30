@@ -64,9 +64,42 @@ def get_signal(
     ctx: AccessContext = Depends(get_access_context),
 ):
     from app.services.signal_service import SignalService
+    from app.database import TradingRepository
+    from app.config import Settings
     svc = SignalService()
     try:
-        return _serialize(svc.get(signal_id, ctx))
+        sig = svc.get(signal_id, ctx)
+        result = sig.to_dict()
+        # Enrich with trade data if executed
+        repo = TradingRepository(Settings().database_path)
+        ep = result.get("entry_price")
+        trade_rows = []
+        if ep:
+            trade_rows = repo._connection.execute(
+                "SELECT trade_id, side, quantity, entry_price, exit_price, realized_pnl, fees, entry_time, exit_time "
+                "FROM trades WHERE symbol=? AND CAST(entry_price AS REAL)=CAST(? AS REAL) "
+                "ORDER BY entry_time DESC LIMIT 1",
+                (result.get("symbol"), ep)).fetchall()
+        if trade_rows:
+            t = trade_rows[0]
+            result["trade"] = {
+                "trade_id": t[0], "side": t[1], "quantity": t[2],
+                "entry_price": t[3], "exit_price": t[4],
+                "realized_pnl": t[5], "fees": t[6],
+                "entry_time": t[7], "exit_time": t[8],
+            }
+            tp = result.get("tp1")
+            sl = result.get("stop_loss")
+            if ep and tp and sl:
+                try:
+                    ep_f = float(ep); tp_f = float(tp); sl_f = float(sl)
+                    risk = abs(ep_f - sl_f)
+                    reward = abs(tp_f - ep_f)
+                    result["risk_reward"] = round(reward / risk, 2) if risk else None
+                except (ValueError, TypeError, ZeroDivisionError):
+                    pass
+        repo.close()
+        return result
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
 

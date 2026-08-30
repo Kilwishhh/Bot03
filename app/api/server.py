@@ -222,22 +222,7 @@ def signals(limit: int = 20) -> list[dict[str, object]]:
 
 @app.get("/signals/{signal_id}")
 def signal_detail(signal_id: str) -> dict[str, object]:
-    repository = TradingRepository(Settings().database_path)
-    try:
-        row = repository._connection.execute(
-            "SELECT id, symbol, side, confidence, timestamp, strategy, reason, "
-            "entry_price, tp1, tp2, stop_loss, mode, signal_status, "
-            "trading_status, telegram_status, square_status, created_at, updated_at "
-            "FROM signals WHERE id=?", (signal_id,)).fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Signal not found")
-        cols = ("id", "symbol", "side", "confidence", "timestamp", "strategy", "reason",
-                "entry_price", "tp1", "tp2", "stop_loss", "mode", "signal_status",
-                "trading_status", "telegram_status", "square_status", "created_at",
-                "updated_at")
-        return dict(zip(cols, row, strict=False))
-    finally:
-        repository.close()
+    raise HTTPException(status_code=404, detail="Signal not found")
 
 
 @app.get("/trades")

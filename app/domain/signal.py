@@ -10,6 +10,8 @@ from app.signals.models import Signal as _LegacySignal, SignalSide
 
 
 class SignalStatus(StrEnum):
+    CREATED = "created"
+    PENDING = "pending"
     ACTIVE = "active"
     ENTRY_CONFIRMED = "entry_confirmed"
     TP1_HIT = "tp1_hit"
@@ -21,6 +23,7 @@ class SignalStatus(StrEnum):
 
 class TradingStatus(StrEnum):
     PENDING = "pending"
+    EXECUTED = "executed"
     PLACED = "placed"
     REJECTED = "rejected"
     FILLED = "filled"
