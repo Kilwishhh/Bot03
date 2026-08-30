@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 
 from app.core.rbac import AccessContext
+from app.database.repository import TradingRepository
 from app.exchange.models import Candle, OrderRequest, OrderSide, OrderType
 from app.exchange.paper import PaperTradingAdapter
 
@@ -277,6 +278,104 @@ async def simulate_signal(strategy_id: str, user_id: str = "") -> dict:
         "timestamp": now.isoformat(),
         "symbols_tested": symbols,
         "results": results,
+    }
+
+
+@router.post("/signals/{signal_id}/paper-trade")
+async def paper_trade_existing_signal(signal_id: str) -> dict:
+    """Execute a paper trade against an existing signal (admin manual trigger)."""
+    from datetime import UTC, datetime as _dt
+    from app.exchange.paper import PaperTradingAdapter as _Paper
+    from app.exchange.models import OrderRequest as _OR, OrderSide as _OS, OrderType as _OT
+
+    db = TradingRepository()
+    row = db._connection.execute(
+        """SELECT id, symbol, side, entry_price, tp1, stop_loss,
+                  trading_status, mode, strategy_id, user_id
+           FROM signals WHERE id=?""", (signal_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    if row[6] and row[6].upper() == "EXECUTED":
+        raise HTTPException(status_code=400, detail="Signal already traded")
+
+    symbol = row[1]
+    side_str = row[2]
+    entry_raw = row[3]
+    if entry_raw is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Signal has no entry_price; cannot execute paper trade",
+        )
+    entry_f = float(entry_raw)
+    strategy_id = row[7]
+    user_id = row[8]
+    notional = 100.0
+    quantity = Decimal(str(round(notional / entry_f, 5)))
+    trade_id = str(uuid4())
+    now = _dt.now(UTC).isoformat()
+
+    paper = _Paper()
+    side_enum = _OS.BUY if side_str == "BUY" else _OS.SELL
+    order = paper.place_order(_OR(
+        symbol=symbol, side=side_enum, order_type=_OT.MARKET,
+        quantity=quantity, price=None,
+    ))
+
+    db._connection.execute(
+        """INSERT INTO trades
+           (trade_id, symbol, side, quantity, entry_price, exit_price,
+            realized_pnl, fees, strategy, entry_time, exit_time)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+        (trade_id, symbol, side_str, float(quantity), entry_f,
+         None, None, 0.0, strategy_id, now, None),
+    )
+    db._connection.execute(
+        """INSERT OR REPLACE INTO positions
+           (symbol, side, quantity, entry_price, mark_price,
+            leverage, unrealized_pnl, updated_at)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        (symbol, side_str, float(quantity), entry_f, entry_f, 1, 0.0, now),
+    )
+    db._connection.execute(
+        """UPDATE signals
+           SET trading_status='EXECUTED', signal_status='EXECUTED', updated_at=?
+           WHERE UPPER(COALESCE(trading_status,'PENDING')) != 'EXECUTED'
+           AND id=?""", (now, signal_id),
+    )
+    db._connection.commit()
+
+    try:
+        from app.services.automation_engine import AutomationEngine
+        from app.core.rbac import AccessContext as _AC
+        from app.domain.user import User as _U, UserRole as _UR, UserStatus as _US
+        if user_id:
+            from app.database.repository import TradingRepository as _TR
+            repo = _TR()
+            ur = repo._connection.execute(
+                "SELECT id,email,display_name,role,status FROM users WHERE id=?",
+                (user_id,)).fetchone()
+            if ur:
+                ctx = _AC(user=_U(id=ur[0], email=ur[1], password_hash="",
+                                    display_name=ur[2] or ur[1],
+                                    role=_UR(ur[3] or "USER"),
+                                    status=_US(ur[4] or "ACTIVE"),
+                                    created_at=now, updated_at=now))
+                try:
+                    AutomationEngine().on_signal_generated(signal_id, ctx)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return {
+        "signal_id": signal_id,
+        "trade_id": trade_id,
+        "symbol": symbol,
+        "side": side_str,
+        "quantity": float(quantity),
+        "entry_price": entry_f,
+        "trading_status": "EXECUTED",
     }
 
 

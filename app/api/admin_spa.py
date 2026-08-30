@@ -437,24 +437,111 @@ const pages = {
       h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Side'),
       h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Confidence'),
       h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Strategy'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Entry'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'TP / SL'),
+      h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'Trade'),
       h('th', { style: 'text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;font-weight:600' }, 'When'),
     ]));
     const tbody = h('tbody', {});
     for (const s of signals) {
       const sideCls = s.side === 'BUY' ? 'badge-green' : s.side === 'SELL' ? 'badge-red' : 'badge-gray';
-      tbody.appendChild(h('tr', { style: 'border-bottom:1px solid var(--border)' }, [
+      const tradeBadge = s.trading_status === 'EXECUTED' ? 'badge-green'
+        : s.trading_status === 'PENDING' ? 'badge-yellow'
+        : s.trading_status ? 'badge-gray' : '—';
+      const row = h('tr', {
+        style: 'border-bottom:1px solid var(--border);cursor:pointer;background:' +
+          (s.trading_status === 'EXECUTED' ? '#064e3b33' : 'transparent')
+      }, [
         h('td', { style: 'padding:8px 12px' }, h('strong', {}, s.symbol || '—')),
         h('td', { style: 'padding:8px 12px' }, [h('span', { class: 'badge ' + sideCls }, s.side || '—')]),
         h('td', { style: 'padding:8px 12px' }, s.confidence != null ? (s.confidence * 100).toFixed(0) + '%' : '—'),
         h('td', { style: 'padding:8px 12px;font-size:11px;color:var(--muted)' }, s.strategy || s.strategy_name || '—'),
-        h('td', { style: 'padding:8px 12px;font-size:11px;color:var(--muted)' }, s.created_at ? new Date(s.created_at).toLocaleString() : s.timestamp ? new Date(s.timestamp).toLocaleString() : '—'),
-      ]));
+        h('td', { style: 'padding:8px 12px;font-size:12px' }, s.entry_price != null ? '$' + s.entry_price : '—'),
+        h('td', { style: 'padding:8px 12px;font-size:11px;color:var(--muted)' },
+          (s.tp1 ? 'TP $' + s.tp1 : '—') + (s.stop_loss ? ' · SL $' + s.stop_loss : '')),
+        h('td', { style: 'padding:8px 12px' }, [h('span', { class: 'badge ' + tradeBadge }, s.trading_status || '—')]),
+        h('td', { style: 'padding:8px 12px;font-size:11px;color:var(--muted)' },
+          s.created_at ? new Date(s.created_at).toLocaleString() : s.timestamp ? new Date(s.timestamp).toLocaleString() : '—'),
+      ]);
+      row.addEventListener('click', () => viewSignal(s.id));
+      tbody.appendChild(row);
     }
     table.appendChild(thead);
     table.appendChild(tbody);
+
+    const detail = h('div', { class: 'card', style: 'margin-top:16px;padding:0;overflow:auto' });
+    const detailBody = h('div', { style: 'padding:24px' });
+    detailBody.appendChild(h('p', { style: 'color:var(--muted);font-size:13px' }, 'Click any signal row to view details and paper trade it.'));
+    detail.appendChild(detailBody);
+
+    let _active = null;
+    async function viewSignal(id) {
+      if (_active === id) return;
+      _active = id;
+      try {
+        const sig = await api('GET', '/signals/' + id);
+        detailBody.innerHTML = '';
+        const header = h('div', { style: 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px' }, [
+          h('h2', { style: 'margin:0;font-size:18px' }, sig.symbol + ' · ' + sig.side),
+          h('button', { class: 'btn btn-ghost', onclick: 'location.hash="signals"' }, '✕ Close'),
+        ]);
+        detailBody.appendChild(header);
+
+        const fields = [
+          ['Side', sig.side],
+          ['Confidence', sig.confidence != null ? (sig.confidence * 100).toFixed(0) + '%' : '—'],
+          ['Entry', sig.entry_price != null ? '$' + sig.entry_price : '—'],
+          ['TP1', sig.tp1 != null ? '$' + sig.tp1 : '—'],
+          ['TP2', sig.tp2 != null ? '$' + sig.tp2 : '—'],
+          ['Stop Loss', sig.stop_loss != null ? '$' + sig.stop_loss : '—'],
+          ['Mode', sig.mode],
+          ['Strategy', sig.strategy || sig.strategy_name || '—'],
+          ['Signal Status', sig.signal_status],
+          ['Trading Status', sig.trading_status || '—'],
+          ['Telegram Status', sig.telegram_status || '—'],
+          ['Square Status', sig.square_status || '—'],
+        ];
+        const grid = h('div', { style: 'display:grid;grid-template-columns:repeat(2,1fr);gap:8px 16px;font-size:13px' });
+        for (const [k, v] of fields) {
+          const row = h('div', {}, [
+            h('span', { style: 'color:var(--muted);font-size:12px' }, k + ': '),
+            h('span', { style: 'font-weight:600' }, String(v || '—')),
+          ]);
+          grid.appendChild(row);
+        }
+        detailBody.appendChild(grid);
+
+        if (sig.reason) {
+          const reason = h('div', { class: 'card', style: 'margin-top:12px;padding:12px;font-size:12px;color:var(--muted)' });
+          reason.appendChild(h('div', { style: 'font-weight:600;color:var(--text);margin-bottom:4px' }, 'Reason'));
+          reason.appendChild(h('div', {}, Array.isArray(sig.reason) ? sig.reason.join(' · ') : String(sig.reason)));
+          detailBody.appendChild(reason);
+        }
+
+        const actions = h('div', { style: 'margin-top:16px;display:flex;gap:8px' });
+        const tradeBtn = h('button', { class: 'btn btn-primary' }, '📈 Paper Trade This Signal');
+        tradeBtn.onclick = async () => {
+          tradeBtn.disabled = true; tradeBtn.textContent = 'Trading…';
+          try {
+            const r = await api('POST', '/dev/signals/' + sig.id + '/paper-trade', {});
+            tradeBtn.textContent = '✓ Trade ' + (r.trade_id || '').slice(0, 8);
+            tradeBtn.classList.remove('btn-primary'); tradeBtn.classList.add('btn-ghost');
+            setTimeout(() => viewSignal(sig.id), 400);
+          } catch (e) {
+            tradeBtn.disabled = false; tradeBtn.textContent = '❌ ' + e.message;
+          }
+        };
+        actions.appendChild(tradeBtn);
+        detailBody.appendChild(actions);
+      } catch (e) {
+        detailBody.innerHTML = '<p style="color:var(--danger)">Failed to load: ' + e.message + '</p>';
+      }
+    }
+
     return [
       h('div', { class: 'page-header' }, [h('h1', { class: 'page-title' }, 'All Signals')]),
       h('div', { class: 'card', style: 'padding:0;overflow:auto' }, [table]),
+      detail,
     ];
   },
 

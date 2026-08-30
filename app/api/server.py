@@ -211,8 +211,31 @@ def signals(limit: int = 20) -> list[dict[str, object]]:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
     repository = TradingRepository(Settings().database_path)
     try:
-        rows = repository._connection.execute("SELECT symbol, side, confidence, timestamp, strategy, reason FROM signals ORDER BY timestamp DESC LIMIT ?", (limit,)).fetchall()
-        return [{"symbol": row[0], "side": row[1], "confidence": row[2], "timestamp": row[3], "strategy": row[4], "reason": row[5]} for row in rows]
+        rows = repository._connection.execute(
+            "SELECT * FROM signals ORDER BY timestamp DESC LIMIT ?", (limit,)).fetchall()
+        cols = [r[1] for r in repository._connection.execute(
+            "PRAGMA table_info(signals)").fetchall()]
+        return [dict(zip(cols, row, strict=False)) for row in rows]
+    finally:
+        repository.close()
+
+
+@app.get("/signals/{signal_id}")
+def signal_detail(signal_id: str) -> dict[str, object]:
+    repository = TradingRepository(Settings().database_path)
+    try:
+        row = repository._connection.execute(
+            "SELECT id, symbol, side, confidence, timestamp, strategy, reason, "
+            "entry_price, tp1, tp2, stop_loss, mode, signal_status, "
+            "trading_status, telegram_status, square_status, created_at, updated_at "
+            "FROM signals WHERE id=?", (signal_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Signal not found")
+        cols = ("id", "symbol", "side", "confidence", "timestamp", "strategy", "reason",
+                "entry_price", "tp1", "tp2", "stop_loss", "mode", "signal_status",
+                "trading_status", "telegram_status", "square_status", "created_at",
+                "updated_at")
+        return dict(zip(cols, row, strict=False))
     finally:
         repository.close()
 
