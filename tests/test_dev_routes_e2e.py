@@ -3,7 +3,6 @@
 Tests the complete paper-trade pipeline:
   Strategy → Signal → Paper Order → Filled Order → Position → TP/SL → Closed Trade → PnL
 """
-from decimal import Decimal
 from fastapi.testclient import TestClient
 
 
