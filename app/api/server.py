@@ -57,10 +57,11 @@ try:
 except Exception:
     pass
 
-# include prometheus endpoint if available
+# include prometheus endpoint if available (mounted under /prom to avoid
+# collision with the legacy /metrics JSON endpoint at line ~206)
 try:
     from app.api.prometheus import router as prom_router
-    app.include_router(prom_router)
+    app.include_router(prom_router, prefix="/prom")
 except Exception:
     pass
 
