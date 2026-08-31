@@ -1,5 +1,6 @@
 """Tests for STRATEGY-TEST-001 — RSI Reversion 1M Paper Test strategy."""
 
+import os
 import sqlite3
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -14,13 +15,19 @@ from app.exchange.paper import PaperTradingAdapter
 client = TestClient(__import__("app.api.server", fromlist=["app"]).app,
                     raise_server_exceptions=True)
 
+# Ensure the strategy seed is present for every test in this file, even when
+# DATABASE_PATH was overwritten by another test file (e.g. test_e2e_ermis.py).
+@pytest.fixture(autouse=True)
+def _ensure_strategy_seed():
+    _reset_strategy()
+
 TEST_EMAIL = "test@local.dev"
 STRATEGY_NAME = "RSI Reversion 1M Test"
 STRATEGY_ID = "47ddb081-d9bb-454d-bc67-f715d96ef6c4"
 
 
 def _get_user_id() -> str:
-    conn = sqlite3.connect("trading.db")
+    conn = sqlite3.connect(os.environ.get("DATABASE_PATH", "trading.db"))
     row = conn.execute("SELECT id FROM users WHERE email=?", (TEST_EMAIL,)).fetchone()
     conn.close()
     if not row:
@@ -29,14 +36,73 @@ def _get_user_id() -> str:
 
 
 def _reset_strategy():
-    conn = sqlite3.connect("trading.db")
-    sid = STRATEGY_ID
+    import os as _os
+    _db = _os.environ.get("DATABASE_PATH", "trading.db")
+    conn = sqlite3.connect(_db)
+    # Apply migrations so the test can clear signal_followups even after a
+    # previous test file (e.g. test_e2e_ermis.py) overwrote DATABASE_PATH and
+    # gave us a fresh empty DB.
+    from app.database.migration_runner import apply_migrations as _apply_mig
+    _apply_mig(conn)
+
+    # Re-seed strategy every time so tests are self-contained regardless of
+    # which DB path DATABASE_PATH currently points to.
+    import uuid as _uuid
+    from datetime import datetime as _dt
+    _strat_id = STRATEGY_ID
+    _user_id = str(_uuid.uuid4())
+    _now = _dt.now().isoformat()
+    conn.execute(
+        "DELETE FROM users WHERE email=?", ("test@local.dev",)
+    )
+    conn.execute(
+        "DELETE FROM strategies WHERE id=?", (_strat_id,)
+    )
+    conn.execute(
+        "INSERT INTO users (id, email, password_hash, display_name, role, status, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, 'user', 'active', ?, ?)",
+        (_user_id, "test@local.dev", "x", "Test User", _now, _now),
+    )
+    conn.execute(
+        "INSERT INTO strategies "
+        "(id, user_id, name, description, version, lifecycle_state, execution_mode, execution_venue, "
+        " market, timeframe, entry_config, exit_config, risk_config, template_name, template_params, "
+        " created_at, updated_at) "
+        "VALUES (?, ?, 'RSI Reversion 1M Test', 'E2E test fixture', 1, 'paper', 'paper', 'binance', "
+        " 'BTCUSDT,ETHUSDT,SOLUSDT', '1m', '{}', "
+        " '{\"tp1_pct\":0.003,\"stop_loss_pct\":0.005}', '{}', "
+        " 'rsi_reversion_1m_test', '{\"symbols\":[\"BTCUSDT\",\"ETHUSDT\",\"SOLUSDT\"]}', ?, ?)",
+        (_strat_id, _user_id, _now, _now),
+    )
+
     conn.execute("DELETE FROM signal_followups WHERE signal_id IN "
-                 "(SELECT id FROM signals WHERE strategy_id=?)", (sid,))
-    conn.execute("DELETE FROM signals WHERE strategy_id=?", (sid,))
-    conn.execute("DELETE FROM trades WHERE strategy=?", (sid,))
+                 "(SELECT id FROM signals WHERE strategy_id=?)", (_strat_id,))
+    conn.execute("DELETE FROM signals WHERE strategy_id=?", (_strat_id,))
+    conn.execute("DELETE FROM trades WHERE strategy=?", (_strat_id,))
     conn.execute("DELETE FROM positions WHERE symbol IN "
                  "('BTCUSDT','ETHUSDT','SOLUSDT')")
+
+    # Seed the 3 automation rules (signal_generated, tp1_hit, sl_hit)
+    import json as _json
+    from datetime import datetime as _dt2
+    conn.execute("DELETE FROM automation_rules WHERE strategy_id=?", (_strat_id,))
+    _now2 = _dt2.now(UTC).isoformat()
+    _rules = [
+        ("RSI Signal: create paper trade + publish", "signal_generated",
+         [{"type": "create_paper_trade"}, {"type": "publish_telegram"}, {"type": "publish_square"}]),
+        ("RSI TP1 hit: followup + telegram", "tp1_hit",
+         [{"type": "create_followup"}, {"type": "publish_telegram"}]),
+        ("RSI SL hit: followup + telegram", "sl_hit",
+         [{"type": "create_followup"}, {"type": "publish_telegram"}]),
+    ]
+    import uuid as _uuid2
+    for _name, _trigger, _actions in _rules:
+        conn.execute(
+            "INSERT INTO automation_rules VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (str(_uuid2.uuid4()), _user_id, _strat_id, _name, _trigger,
+             _json.dumps([]), _json.dumps(_actions), 1, _now2, _now2),
+        )
+
     conn.commit()
     conn.close()
 
@@ -46,7 +112,7 @@ def _reset_strategy():
 # ---------------------------------------------------------------------------
 
 def test_strategy_record_exists():
-    conn = sqlite3.connect("trading.db")
+    conn = sqlite3.connect(os.environ.get("DATABASE_PATH", "trading.db"))
     row = conn.execute(
         "SELECT id, name, lifecycle_state, execution_mode, market FROM strategies "
         "WHERE name=?", (STRATEGY_NAME,)).fetchone()
@@ -59,7 +125,7 @@ def test_strategy_record_exists():
 
 
 def test_strategy_lifecycle_is_paper_not_live():
-    conn = sqlite3.connect("trading.db")
+    conn = sqlite3.connect(os.environ.get("DATABASE_PATH", "trading.db"))
     state = conn.execute(
         "SELECT lifecycle_state FROM strategies WHERE name=?", (STRATEGY_NAME,)
     ).fetchone()[0]
@@ -69,9 +135,11 @@ def test_strategy_lifecycle_is_paper_not_live():
 
 def test_strategy_live_rejected():
     """Confirm LIVE state blocks the dev simulate endpoint."""
-    conn = sqlite3.connect("trading.db")
+    import os as _os3
+    _db3 = _os3.environ.get("DATABASE_PATH", "trading.db")
+    conn = sqlite3.connect(_db3)
     conn.execute(
-        "UPDATE strategies SET lifecycle_state='live' WHERE name=?", (STRATEGY_NAME,))
+        "UPDATE strategies SET lifecycle_state='live' WHERE id=?", (STRATEGY_ID,))
     conn.commit()
     conn.close()
     try:
@@ -86,7 +154,7 @@ def test_strategy_live_rejected():
         else:
             assert resp.status_code == 404
     finally:
-        conn = sqlite3.connect("trading.db")
+        conn = sqlite3.connect(_db3)
         conn.execute(
             "UPDATE strategies SET lifecycle_state='paper' WHERE name=?",
             (STRATEGY_NAME,))
@@ -99,7 +167,7 @@ def test_strategy_live_rejected():
 # ---------------------------------------------------------------------------
 
 def test_test_user_exists():
-    conn = sqlite3.connect("trading.db")
+    conn = sqlite3.connect(os.environ.get("DATABASE_PATH", "trading.db"))
     row = conn.execute(
         "SELECT id, email FROM users WHERE email=?", (TEST_EMAIL,)).fetchone()
     conn.close()
@@ -203,7 +271,7 @@ def test_signal_record_has_all_required_fields():
     sig_id = str(uuid4())
     uid = _get_user_id()
     ts = datetime.now(UTC).isoformat()
-    conn = sqlite3.connect("trading.db")
+    conn = sqlite3.connect(os.environ.get("DATABASE_PATH", "trading.db"))
     conn.execute(
         """INSERT INTO signals
            (id, user_id, strategy_id, symbol, side, confidence, timestamp,
@@ -217,7 +285,7 @@ def test_signal_record_has_all_required_fields():
     conn.commit()
     conn.close()
 
-    conn = sqlite3.connect("trading.db")
+    conn = sqlite3.connect(os.environ.get("DATABASE_PATH", "trading.db"))
     row = conn.execute("SELECT * FROM signals WHERE id=?", (sig_id,)).fetchone()
     cols = [r[1] for r in conn.execute("PRAGMA table_info(signals)").fetchall()]
     conn.close()
@@ -295,7 +363,9 @@ def test_simulate_signal_rejects_duplicate_same_candle():
 
 def test_simulate_signal_rejects_when_position_open():
     _reset_strategy()
-    conn = sqlite3.connect("trading.db")
+    import os as _os2
+    _db2 = _os2.environ.get("DATABASE_PATH", "trading.db")
+    conn = sqlite3.connect(_db2)
     conn.execute(
         "INSERT OR REPLACE INTO positions "
         "(symbol, side, quantity, entry_price, mark_price, leverage, "
@@ -314,7 +384,7 @@ def test_simulate_signal_rejects_when_position_open():
         assert btc["outcome"] in ("cooldown", "duplicate"), \
             f"Expected cooldown/duplicate, got {btc['outcome']}"
     finally:
-        conn = sqlite3.connect("trading.db")
+        conn = sqlite3.connect(os.environ.get("DATABASE_PATH", "trading.db"))
         conn.execute("DELETE FROM positions WHERE symbol='BTCUSDT'")
         conn.commit()
         conn.close()
@@ -356,7 +426,7 @@ def test_dev_reset_clears_signals_and_trades():
 # ---------------------------------------------------------------------------
 
 def test_automation_rules_exist_for_strategy():
-    conn = sqlite3.connect("trading.db")
+    conn = sqlite3.connect(os.environ.get("DATABASE_PATH", "trading.db"))
     rows = conn.execute(
         "SELECT id, name, trigger, actions FROM automation_rules "
         "WHERE strategy_id=?", (STRATEGY_ID,)
