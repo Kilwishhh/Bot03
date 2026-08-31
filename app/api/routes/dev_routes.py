@@ -147,9 +147,16 @@ async def simulate_signal(strategy_id: str, user_id: str = "") -> dict:
         if sym not in existing:
             existing[sym] = ts
 
-    # Cooldown: symbols with an open position in `positions` table
-    open_syms = {r[0] for r in db._connection.execute(
-        "SELECT symbol FROM positions").fetchall()}
+    # Cooldown: symbols with an open position for THIS strategy only.
+    # Previously this queried all positions without filtering by strategy_id,
+    # which caused cross-strategy position blocks in E2E tests.
+    open_syms = {
+        r[0]
+        for r in db._connection.execute(
+            "SELECT symbol FROM positions WHERE strategy_id=?",
+            (strategy_id,),
+        ).fetchall()
+    }
 
     paper = PaperTradingAdapter()
 
@@ -275,10 +282,10 @@ async def simulate_signal(strategy_id: str, user_id: str = "") -> dict:
         db._connection.execute(
             """INSERT OR REPLACE INTO positions
                (symbol, side, quantity, entry_price, mark_price,
-                leverage, unrealized_pnl, updated_at)
-               VALUES (?,?,?,?,?,?,?,?)""",
+                leverage, unrealized_pnl, strategy_id, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
             (symbol, direction, float(quantity), entry_f, entry_f,
-             1, 0.0, candle_ts),
+             paper._leverage, 0.0, strategy_id, candle_ts),
         )
         db._connection.commit()
 
@@ -389,9 +396,9 @@ async def paper_trade_existing_signal(signal_id: str) -> dict:
     db._connection.execute(
         """INSERT OR REPLACE INTO positions
            (symbol, side, quantity, entry_price, mark_price,
-            leverage, unrealized_pnl, updated_at)
-           VALUES (?,?,?,?,?,?,?,?)""",
-        (symbol, side_str, float(quantity), entry_f, entry_f, 1, 0.0, now),
+            leverage, unrealized_pnl, strategy_id, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        (symbol, side_str, float(quantity), entry_f, entry_f, paper._leverage, 0.0, strategy_id, now),
     )
     db._connection.execute(
         """UPDATE signals

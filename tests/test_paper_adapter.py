@@ -6,6 +6,9 @@ from app.exchange.paper import PaperTradingAdapter
 
 def test_paper_order_does_not_need_network():
     adapter = PaperTradingAdapter(Decimal("1000"))
+    # PRD §3: callers must supply a real market price. Seed the in-memory
+    # price cache (the same path update_market_price / get_ticker write to).
+    adapter._prices["BTCUSDT"] = Decimal("30000")
     result = adapter.place_order(OrderRequest("BTCUSDT", OrderSide.BUY, OrderType.MARKET, Decimal("0.01")))
     assert result.status == "FILLED"
     assert adapter.health_check() is True

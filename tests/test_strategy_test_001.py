@@ -306,6 +306,7 @@ def test_signal_record_has_all_required_fields():
 
 def test_paper_adapter_execute_market_buy():
     paper = PaperTradingAdapter(starting_balance=Decimal("10000"))
+    paper._prices["BTCUSDT"] = Decimal("30000")
     result = paper.place_order(OrderRequest(
         symbol="BTCUSDT", side=OrderSide.BUY, order_type=OrderType.MARKET,
         quantity=Decimal("0.001"), price=None,
@@ -318,6 +319,7 @@ def test_paper_adapter_execute_market_buy():
 
 def test_paper_adapter_execute_market_sell():
     paper = PaperTradingAdapter(starting_balance=Decimal("10000"))
+    paper._prices["BTCUSDT"] = Decimal("30000")
     paper.place_order(OrderRequest(
         symbol="BTCUSDT", side=OrderSide.BUY, order_type=OrderType.MARKET,
         quantity=Decimal("0.001"), price=None,
@@ -369,9 +371,9 @@ def test_simulate_signal_rejects_when_position_open():
     conn.execute(
         "INSERT OR REPLACE INTO positions "
         "(symbol, side, quantity, entry_price, mark_price, leverage, "
-        " unrealized_pnl, updated_at) VALUES (?,?,?,?,?,?,?,?)",
+        " unrealized_pnl, strategy_id, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
         ("BTCUSDT", "BUY", 0.001, 100.0, 100.0, 1, 0.0,
-         datetime.now(UTC).isoformat()),
+         STRATEGY_ID, datetime.now(UTC).isoformat()),
     )
     conn.commit()
     conn.close()

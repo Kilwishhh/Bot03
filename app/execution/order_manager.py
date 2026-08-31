@@ -44,7 +44,9 @@ class OrderManager:
         if quantity <= 0:
             return None
         side = OrderSide.BUY if signal.side is SignalSide.BUY else OrderSide.SELL
-        request = OrderRequest(signal.symbol, side, OrderType.MARKET, quantity)
+        # Pass the live ticker price so the paper adapter can fill without
+        # a hidden constant fallback (PRD §3: no fake prices in runtime).
+        request = OrderRequest(signal.symbol, side, OrderType.MARKET, quantity, price=ticker.price)
         if self._dex_gate.supports_preview():
             # DEX providers require an explicit wallet-approval step; the
             # signal flow prepares the request but does NOT auto-approve it.

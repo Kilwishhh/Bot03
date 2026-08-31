@@ -20,6 +20,8 @@ def test_limit_order_requires_price():
 
 
 def test_position_manager_validates_before_submission():
-    manager = PositionManager(PaperTradingAdapter())
+    adapter = PaperTradingAdapter()
+    adapter._prices["BTCUSDT"] = Decimal("30000")
+    manager = PositionManager(adapter)
     result = manager.submit(OrderRequest("BTCUSDT", OrderSide.BUY, OrderType.MARKET, Decimal("0.01")))
     assert result.status == "FILLED"

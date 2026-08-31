@@ -8,6 +8,7 @@ from app.exchange.paper import PaperTradingAdapter
 
 def test_paper_order_status_and_cancel_all_are_available():
     exchange = PaperTradingAdapter()
+    exchange._prices["BTCUSDT"] = Decimal("30000")
     result = exchange.place_order(OrderRequest("BTCUSDT", OrderSide.BUY, OrderType.MARKET, Decimal("1")))
     assert exchange.get_order_status("BTCUSDT", result.order_id).status == "FILLED"
     assert exchange.get_open_orders("BTCUSDT") == []
