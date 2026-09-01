@@ -41,11 +41,10 @@ def test_mobile_api_exposes_summary():
 def test_admin_dashboard_is_available():
     response = TestClient(app).get("/admin")
     assert response.status_code == 200
+    # Vite SPA: HTML shell has <div id="root"></div> and JS bundle, no SSR.
     assert "MK Trader" in response.text
-    # New SPA: routes are JS-rendered after auth, so check for shell markers
-    assert "sidebar-logo" in response.text
-    assert "Overview" in response.text
-    assert "All Signals" in response.text
+    assert '<div id="root"></div>' in response.text
+    assert "assets/index-" in response.text and ".js" in response.text
 
 
 def test_admin_status_is_available():
@@ -73,13 +72,12 @@ def test_remote_control_is_disabled_by_default():
 
 
 def test_admin_dashboard_exposes_control_token_and_feedback():
-    # New SPA: token + feedback UI is JS-rendered after login; the static
-    # shell must still expose the nav items and feedback status element.
+    # New Vite SPA: nav and feedback are JS-rendered after login; the static
+    # shell must still expose the SPA mount point and JS bundle.
     response = TestClient(app).get("/admin")
     assert response.status_code == 200
-    assert "data-route" in response.text  # nav items present
-    assert "sidebar-logo" in response.text  # shell markers
     assert 'id="root"' in response.text  # SPA mount point
+    assert "assets/index-" in response.text and ".js" in response.text  # JS bundle
 
 
 def test_admin_data_exposes_operational_views_and_safety_config():

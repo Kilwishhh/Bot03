@@ -10,6 +10,7 @@ import Trades from './pages/Trades'
 import Positions from './pages/Positions'
 import PaperConfig from './pages/PaperConfig'
 import Risk from './pages/Risk'
+import Settings from './pages/Settings'
 
 const BASE_KEY = 'mk_api_base'
 function saveBase(b: string) { localStorage.setItem(BASE_KEY, b) }
@@ -65,6 +66,7 @@ function Shell() {
           <NavLink to="/positions" className={({isActive}) => isActive ? 'active' : ''}>Positions</NavLink>
           <NavLink to="/paper-config" className={({isActive}) => isActive ? 'active' : ''}>Paper Config</NavLink>
           <NavLink to="/risk" className={({isActive}) => isActive ? 'active' : ''}>Risk</NavLink>
+          <NavLink to="/settings" className={({isActive}) => isActive ? 'active' : ''}>Settings</NavLink>
           <a onClick={out} style={{cursor:'pointer', marginTop:24}}>Sign out</a>
         </nav>
       </aside>
@@ -80,6 +82,7 @@ function Shell() {
           <Route path="/positions" element={<Positions />} />
           <Route path="/paper-config" element={<PaperConfig />} />
           <Route path="/risk" element={<Risk />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
     </div>

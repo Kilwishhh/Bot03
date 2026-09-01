@@ -73,7 +73,6 @@ except Exception:
 
 # include ermis API routes (all scoped under /auth, /admin, /strategies, etc.)
 try:
-    from app.api.admin_spa import router as admin_spa_router
     from app.api.routes import (
         admin_routes,
         automation_routes,
@@ -89,7 +88,12 @@ try:
         user_routes,
     )
 
-    app.include_router(admin_spa_router)
+    # NOTE: app.api.admin_spa is the OLD Jinja2 single-file admin. Disabled
+    # because the Vite-built admin-spa is now served from /admin via the
+    # `admin_spa_index` route below (see @app.get("/admin")).
+    # To re-enable the old admin for debugging, uncomment the next two lines.
+    # from app.api.admin_spa import router as admin_spa_router
+    # app.include_router(admin_spa_router)
     app.include_router(admin_routes.router)
     app.include_router(config_routes.router)
     app.include_router(dev_routes.router)
@@ -146,6 +150,11 @@ def ui_index() -> FileResponse:
     return FileResponse(
         Path(__file__).resolve().parent.parent / "dashboard" / "dist" / "index.html"
     )
+
+
+# NOTE: The /admin SPA catch-all routes are defined at the BOTTOM of this
+# file so they don't shadow API routes registered after them (e.g.
+# /admin/square/status, /admin/audit/tail). Starlette matches in order.
 
 
 @app.get("/mobile", include_in_schema=False)
@@ -327,6 +336,43 @@ def admin_status(_: None = Depends(require_admin_token)) -> dict[str, object]:
         "live_trading_enabled": settings.enable_live_trading,
         "remote_control_enabled": settings.enable_remote_control,
     }
+
+
+@app.post("/admin/restart")
+def admin_restart(_: None = Depends(require_admin_token)) -> dict[str, object]:
+    """Restart the FastAPI server. The current process exits; a fresh one
+    takes its place on the same port via the dev launcher.
+
+    The dev launcher (`scripts/dev_server.py`) handles restart-on-exit; for
+    raw `uvicorn` invocations, the user must relaunch manually after the
+    response returns.
+    """
+    import os
+    import sys
+    import threading
+
+    def _spawn_replacement():
+        # small delay so the response can flush before we die
+        import time
+        time.sleep(1)
+        try:
+            # If the dev_server launcher is in use, it picks up our exit code.
+            # Otherwise fall back to spawning a new uvicorn directly.
+            if os.environ.get("MK_DEV_LAUNCHER") == "1":
+                os._exit(0)  # dev launcher will respawn
+            import subprocess
+            subprocess.Popen(
+                [sys.executable, "-m", "uvicorn", "app.api.server:app",
+                 "--host", "127.0.0.1", "--port", "8000"],
+                cwd=os.getcwd(),
+                env=os.environ.copy(),
+                close_fds=True,
+            )
+        finally:
+            os._exit(0)
+
+    threading.Thread(target=_spawn_replacement, daemon=False).start()
+    return {"restarting": True, "message": "Server will restart in ~1s"}
 
 
 @app.get("/admin/summary")
@@ -580,3 +626,27 @@ def admin_audit_tail(limit: int = 50, _: None = Depends(require_admin_token)) ->
     """Return the most recent audit-log entries (newest last)."""
     limit = max(1, min(limit, 500))
     return {"entries": get_audit_logger().tail(limit=limit), "limit": limit}
+
+
+# ---------------------------------------------------------------------------
+# Admin SPA: MUST be last so API routes (/admin/square/status etc.) are not
+# shadowed by the catch-all /admin/{full_path:path} wildcard.
+# ---------------------------------------------------------------------------
+_admin_spa_dist = Path(__file__).resolve().parent.parent.parent / "admin-spa" / "dist"
+
+
+@app.get("/admin", include_in_schema=False)
+def admin_spa_index() -> FileResponse:
+    if _admin_spa_dist.is_dir():
+        return FileResponse(_admin_spa_dist / "index.html")
+    raise HTTPException(status_code=404, detail="admin-spa not built; run 'npm run build' in admin-spa/")
+
+
+@app.get("/admin/{full_path:path}", include_in_schema=False)
+def admin_spa_assets(full_path: str) -> FileResponse:
+    if not _admin_spa_dist.is_dir():
+        raise HTTPException(status_code=404, detail="admin-spa not built")
+    target = _admin_spa_dist / full_path
+    if target.exists() and target.is_file():
+        return FileResponse(target)
+    return FileResponse(_admin_spa_dist / "index.html")
