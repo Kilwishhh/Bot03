@@ -169,6 +169,86 @@ def get_strategy(
     raise HTTPException(status_code=404, detail="Strategy not found")
 
 
+@router.patch("/strategies/{strategy_id}")
+def admin_update_strategy(
+    strategy_id: str,
+    payload: dict,
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    """Admin-level PATCH: same fields as the user route but skips ownership check."""
+    from app.api.routes.strategy_routes import _serialize
+    from app.services.strategy_service import StrategyService
+    ctx.require_admin()
+    svc = StrategyService()
+    try:
+        strategies = svc.list_all(ctx)
+        s = next((x for x in strategies if x.id == strategy_id), None)
+        if s is None:
+            raise HTTPException(status_code=404, detail="Strategy not found")
+        for field in ("name", "description", "market", "template_name", "template_params"):
+            if field in payload:
+                setattr(s, field, payload[field])
+        if "entry_config" in payload:
+            from app.domain.strategy import EntryConfig
+            s.entry_config = EntryConfig.from_dict(payload["entry_config"])
+        if "exit_config" in payload:
+            from app.domain.strategy import ExitConfig
+            s.exit_config = ExitConfig.from_dict(payload["exit_config"])
+        if "risk_config" in payload:
+            from app.domain.strategy import RiskConfig
+            s.risk_config = RiskConfig.from_dict(payload["risk_config"])
+        if "execution_mode" in payload:
+            from app.domain.strategy import ExecutionMode
+            s.execution_mode = ExecutionMode(payload["execution_mode"])
+        if "execution_venue" in payload:
+            from app.domain.strategy import ExecutionVenue
+            s.execution_venue = ExecutionVenue(payload["execution_venue"])
+        if "timeframe" in payload:
+            from app.domain.strategy import Timeframe
+            s.timeframe = Timeframe(payload["timeframe"])
+        return _serialize(svc.update(s, ctx))
+    except HTTPException:
+        raise
+    except Exception as e:
+        if hasattr(e, "http_status"):
+            raise HTTPException(status_code=e.http_status, detail=e.message)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/strategies/{strategy_id}/transition")
+def admin_transition_strategy(
+    strategy_id: str,
+    payload: dict,
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    """Admin-level lifecycle transition. target_state ∈ {draft, paper, live, paused, archived, disabled}."""
+    from app.api.routes.strategy_routes import _serialize
+    from app.domain.strategy import LifecycleState
+    from app.services.strategy_lifecycle import StrategyLifecycle
+    from app.services.strategy_service import StrategyService
+    ctx.require_admin()
+    svc = StrategyService()
+    lifecycle = StrategyLifecycle(svc)
+    try:
+        s = next((x for x in svc.list_all(ctx) if x.id == strategy_id), None)
+        if s is None:
+            raise HTTPException(status_code=404, detail="Strategy not found")
+        target = LifecycleState(payload["target_state"])
+        result = lifecycle.transition(
+            s, target, ctx,
+            reason=payload.get("reason"),
+            confirm_live=payload.get("confirm_live", False),
+            confirmation_string=payload.get("confirmation_string", ""),
+        )
+        return _serialize(result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        if hasattr(e, "http_status"):
+            raise HTTPException(status_code=e.http_status, detail=e.message)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/control")
 def admin_control(
     ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),

@@ -149,11 +149,12 @@ class StrategyService:
                 )
                 conn.execute(
                     "UPDATE strategies SET name=?, description=?, version=?, "
-                    "execution_mode=?, execution_venue=?, market=?, timeframe=?, "
-                    "entry_config=?, exit_config=?, risk_config=?, template_name=?, "
-                    "template_params=?, updated_at=? WHERE id=?",
+                    "lifecycle_state=?, execution_mode=?, execution_venue=?, market=?, "
+                    "timeframe=?, entry_config=?, exit_config=?, risk_config=?, "
+                    "template_name=?, template_params=?, updated_at=? WHERE id=?",
                     (
                         strategy.name, strategy.description, strategy.version + 1,
+                        strategy.lifecycle_state.value,
                         strategy.execution_mode.value, strategy.execution_venue.value,
                         strategy.market, strategy.timeframe.value,
                         json.dumps(strategy.entry_config.to_dict()),
