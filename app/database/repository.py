@@ -32,7 +32,7 @@ class TradingRepository:
             self._connection.execute("CREATE TABLE IF NOT EXISTS bot_events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT, message TEXT, created_at TEXT)")
             self._connection.execute("CREATE TABLE IF NOT EXISTS errors (error_id INTEGER PRIMARY KEY AUTOINCREMENT, error_type TEXT, message TEXT, created_at TEXT)")
             self._connection.execute("CREATE TABLE IF NOT EXISTS balances (asset TEXT PRIMARY KEY, wallet_balance TEXT, available_balance TEXT, updated_at TEXT)")
-            self._connection.execute("CREATE TABLE IF NOT EXISTS positions (symbol TEXT PRIMARY KEY, side TEXT, quantity TEXT, entry_price TEXT, mark_price TEXT, leverage INTEGER, unrealized_pnl TEXT, updated_at TEXT)")
+            self._connection.execute("CREATE TABLE IF NOT EXISTS positions (symbol TEXT PRIMARY KEY, side TEXT, quantity TEXT, entry_price TEXT, mark_price TEXT, leverage INTEGER, unrealized_pnl TEXT, strategy_id TEXT, updated_at TEXT)")
             self._connection.execute("CREATE TABLE IF NOT EXISTS control_state (id INTEGER PRIMARY KEY CHECK (id = 1), desired_state TEXT NOT NULL, heartbeat_at TEXT, updated_at TEXT NOT NULL)")
 
             # ── ermis multi-user tables ────────────────────────────────────
@@ -82,9 +82,31 @@ class TradingRepository:
 
     def save_signal(self, signal: Signal) -> None:
         with self._lock:
+            # Introspect the signals table columns — the test DB has the
+            # legacy 6-column schema, the prod DB has the migrated 20-column
+            # schema. Using a fixed column list breaks one or the other.
+            cols = [r[1] for r in self._connection.execute(
+                "PRAGMA table_info(signals)").fetchall()]
+            values = {
+                "symbol": signal.symbol,
+                "side": signal.side.value,
+                "confidence": signal.confidence,
+                "timestamp": signal.timestamp.isoformat(),
+                "strategy": signal.strategy_name,
+                "reason": "; ".join(signal.reason),
+            }
+            if "signal_status" in cols:
+                values["signal_status"] = "CREATED"
+                values["trading_status"] = "PENDING"
+            if "created_at" in cols:
+                values["created_at"] = datetime.now(UTC).isoformat()
+            if "updated_at" in cols:
+                values["updated_at"] = values.get("created_at")
+            placeholders = ", ".join("?" for _ in values)
+            col_list = ", ".join(values)
             self._connection.execute(
-                "INSERT INTO signals VALUES (?, ?, ?, ?, ?, ?)",
-                (signal.symbol, signal.side.value, signal.confidence, signal.timestamp.isoformat(), signal.strategy_name, "; ".join(signal.reason)),
+                f"INSERT INTO signals ({col_list}) VALUES ({placeholders})",
+                tuple(values.values()),
             )
 
     def save_order(self, order: OrderResult) -> None:
@@ -126,8 +148,8 @@ class TradingRepository:
             return
         with self._lock:
             self._connection.execute(
-                "INSERT OR REPLACE INTO positions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (position.symbol, position.side.value, str(position.quantity), str(position.entry_price), str(position.mark_price), position.leverage, str(position.unrealized_pnl), datetime.now(UTC).isoformat()),
+                "INSERT OR REPLACE INTO positions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (position.symbol, position.side.value, str(position.quantity), str(position.entry_price), str(position.mark_price), position.leverage, str(position.unrealized_pnl), position.strategy_id, datetime.now(UTC).isoformat()),
             )
 
     def recent_orders(self, limit: int = 20) -> list[tuple]:
