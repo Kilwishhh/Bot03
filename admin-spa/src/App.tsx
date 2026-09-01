@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { getToken, setToken, clearToken, getBase, setBase, api } from './api'
 import Dashboard from './pages/Dashboard'
+import Logs from './pages/Logs'
 import Users from './pages/Users'
 import Strategies from './pages/Strategies'
 import Signals from './pages/Signals'
@@ -56,6 +57,7 @@ function Shell() {
         <h1>MK Trader</h1>
         <nav>
           <NavLink to="/dashboard" className={({isActive}) => isActive ? 'active' : ''}>Dashboard</NavLink>
+          <NavLink to="/logs" className={({isActive}) => isActive ? 'active' : ''}>Logs</NavLink>
           <NavLink to="/users" className={({isActive}) => isActive ? 'active' : ''}>Users</NavLink>
           <NavLink to="/strategies" className={({isActive}) => isActive ? 'active' : ''}>Strategies</NavLink>
           <NavLink to="/signals" className={({isActive}) => isActive ? 'active' : ''}>Signals</NavLink>
@@ -70,6 +72,7 @@ function Shell() {
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/logs" element={<Logs />} />
           <Route path="/users" element={<Users />} />
           <Route path="/strategies" element={<Strategies />} />
           <Route path="/signals" element={<Signals />} />

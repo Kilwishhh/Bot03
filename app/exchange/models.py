@@ -53,6 +53,7 @@ class Position:
     mark_price: Decimal
     leverage: int
     unrealized_pnl: Decimal = Decimal("0")
+    strategy_id: str | None = None
 
 
 @dataclass(frozen=True)

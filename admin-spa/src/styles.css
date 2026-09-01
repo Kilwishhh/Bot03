@@ -86,3 +86,16 @@ input, select {
 .col { flex: 1; min-width: 280px; }
 .muted { color: var(--text-dim); font-size: 12px; }
 .json { font-family: monospace; font-size: 12px; background: var(--bg); padding: 8px; border-radius: 4px; overflow: auto; }
+.log-box { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; height: calc(100vh - 220px); overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; }
+.log-line { display: flex; gap: 8px; padding: 2px 8px; border-bottom: 1px solid rgba(48,54,61,0.4); align-items: baseline; }
+.log-line:hover { background: rgba(88,166,255,0.04); }
+.log-ts { color: var(--text-dim); flex-shrink: 0; }
+.log-logger { color: var(--purple); flex-shrink: 0; min-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-msg { color: var(--text); word-break: break-all; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px; padding: 24px; width: 480px; max-width: 90vw; }
+.modal h3 { margin-top: 0; }
+.modal label { display: block; margin: 8px 0 4px; color: var(--text-dim); font-size: 12px; }
+.modal input { width: 100%; }
+.modal .error { color: var(--red); font-size: 13px; margin-top: 8px; }
+.ok { color: var(--green); font-size: 13px; margin: 8px 0; }

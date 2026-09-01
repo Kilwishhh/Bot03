@@ -99,9 +99,10 @@ class TradingRepository:
                 values["signal_status"] = "CREATED"
                 values["trading_status"] = "PENDING"
             if "created_at" in cols:
-                values["created_at"] = datetime.now(UTC).isoformat()
-            if "updated_at" in cols:
-                values["updated_at"] = values.get("created_at")
+                now = datetime.now(UTC).isoformat()
+                values["created_at"] = now
+                if "updated_at" in cols:
+                    values["updated_at"] = now
             placeholders = ", ".join("?" for _ in values)
             col_list = ", ".join(values)
             self._connection.execute(

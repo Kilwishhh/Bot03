@@ -46,6 +46,10 @@ import uuid as _uuid_seed
 from datetime import datetime as _dt_seed
 
 _SESSION_DB = os.environ["DATABASE_PATH"]
+
+# Exposed so test fixtures (e.g. test_p001_paper_e2e) can use the same
+# per-test DB that the client fixture's patched TradingRepository uses.
+_TEST_DB_PATH: str | None = None
 _session_conn = _sql_seed.connect(_SESSION_DB)
 try:
     # Force schema creation by opening a repository on this DB
@@ -90,6 +94,8 @@ def client(tmp_path):
     import uuid as _uuid
     from datetime import datetime as _dt
     test_db = str(tmp_path / "trading.db")
+    import tests.conftest as _c
+    _c._TEST_DB_PATH = test_db
 
     # Patch TradingRepository so TradingRepository() (no args) uses the per-test temp DB
     import app.database.repository as _r

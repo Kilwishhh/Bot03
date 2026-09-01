@@ -17,6 +17,7 @@ from app.domain.signal import (
     TradingStatus,
 )
 from app.signals.models import Signal as _LegacySignal
+from app.config import Settings
 
 
 def _enum_or(enum_cls, value: str | None, default):
@@ -29,8 +30,8 @@ def _enum_or(enum_cls, value: str | None, default):
 
 
 class SignalService:
-    def __init__(self, db_path: str = "trading.db") -> None:
-        self._db_path = db_path
+    def __init__(self, db_path: str | None = None) -> None:
+        self._db_path = db_path or Settings().database_path
         self._lock = threading.RLock()
 
     def _conn(self) -> sqlite3.Connection:

@@ -287,3 +287,15 @@ def admin_control_action(
         repo.set_control_state("running")
         return {"action": "resume", "state": "running"}
     raise HTTPException(status_code=400, detail=f"unknown action: {action}")
+
+
+@router.get("/logs")
+def admin_logs(
+    limit: int = 100,
+    since: str | None = None,
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    """Return the most recent server log lines (in-memory ring buffer)."""
+    from app.utils.log_buffer import tail
+    ctx.require_admin()
+    return tail(n=limit, since=since)

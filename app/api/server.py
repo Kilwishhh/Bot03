@@ -9,6 +9,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Install the in-memory log buffer BEFORE any other logging config runs.
+# uvicorn configures its loggers in main(); we need our handler attached
+# so we can tail logs in the admin UI.
+from app.utils.log_buffer import install as _install_log_buffer
+_install_log_buffer()
+
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
