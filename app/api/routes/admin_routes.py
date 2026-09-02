@@ -362,8 +362,11 @@ def admin_control_action(
                 publish_event("bot_start_failed", f"set_control_state failed: {e}\n{_tb.format_exc()}")
                 raise HTTPException(status_code=500, detail=f"set_control_state failed: {e}") from e
             market_data = AdapterMarketDataProvider(exchange)
+            # P0-02: load minimum_hits from paper config
+            _paper_cfg = get_paper_config()
+            _min_hits = int(_paper_cfg.get("minimum_hits", 1))
             try:
-                scanner = StrategyScanner(repository, market_data)
+                scanner = StrategyScanner(repository, market_data, minimum_hits=_min_hits)
             except Exception as e:
                 import traceback as _tb
                 publish_event("bot_start_failed", f"StrategyScanner init failed: {e}\n{_tb.format_exc()}")

@@ -203,6 +203,7 @@ def get_paper_config() -> dict:
             "max_drawdown_pct": raw.get("max_drawdown_pct", 20.0),
             "tp_pct": raw.get("tp_pct", 0.30),
             "sl_pct": raw.get("sl_pct", 0.50),
+            "minimum_hits": raw.get("minimum_hits", 1),
         },
     }
 
@@ -224,6 +225,7 @@ async def post_paper_config(request: Request) -> dict:
         "max_drawdown_pct": float(body.get("max_drawdown_pct", 20.0)),
         "tp_pct": float(body.get("tp_pct", 0.30)),
         "sl_pct": float(body.get("sl_pct", 0.50)),
+        "minimum_hits": int(body.get("minimum_hits", 1)),
     }
     _save_paper_raw(internal)
     return {"ok": True, "config": body}

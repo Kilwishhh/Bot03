@@ -9,6 +9,7 @@ export default function PaperConfig() {
   const [form, setForm] = useState({
     balance: '10000', leverage: '10', trade_size_pct: '1', max_positions: '5',
     max_daily_loss: '500', max_drawdown_pct: '20', tp_pct: '0.30', sl_pct: '0.50',
+    minimum_hits: '1',
   })
 
   const load = async () => {
@@ -27,6 +28,7 @@ export default function PaperConfig() {
           max_drawdown_pct: String(c.max_drawdown_pct ?? 20),
           tp_pct: String(c.tp_pct ?? 0.30),
           sl_pct: String(c.sl_pct ?? 0.50),
+          minimum_hits: String(c.minimum_hits ?? 1),
         }))
       }
     } catch {}
@@ -48,6 +50,7 @@ export default function PaperConfig() {
         max_drawdown_pct: parseFloat(form.max_drawdown_pct),
         tp_pct: parseFloat(form.tp_pct),
         sl_pct: parseFloat(form.sl_pct),
+        minimum_hits: parseInt(form.minimum_hits),
       }
       await api('/paper-config', { method: 'POST', body: payload })
       setMsg('Saved!')
@@ -91,6 +94,8 @@ export default function PaperConfig() {
           <input style={{width:'100%'}} value={form.tp_pct} onChange={e => set('tp_pct', e.target.value)} />
           <label className="muted">Stop Loss %</label>
           <input style={{width:'100%'}} value={form.sl_pct} onChange={e => set('sl_pct', e.target.value)} />
+          <label className="muted">Min conditions pass (N/M)</label>
+          <input style={{width:'100%'}} value={form.minimum_hits} onChange={e => set('minimum_hits', e.target.value)} placeholder="1" type="number" min="1" />
         </div>
       </div>
       <div style={{marginTop:16, display:'flex', gap:8, alignItems:'center'}}>
