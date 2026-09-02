@@ -48,15 +48,28 @@ class IndicatorStrategy(Strategy):
         if len(candles) < max(self.ema_slow, self.rsi_period + 1, self.bb_period, self.adx_period + 1):
             return Signal(**base, side=SignalSide.HOLD, confidence=0.0, reason=["insufficient candles"])
 
-        closes = [c.close for c in candles]
+        closes = [float(c.close) for c in candles]
         fast_ema = ema(closes, self.ema_fast)
         slow_ema = ema(closes, self.ema_slow)
         rsi_val = rsi(closes, self.rsi_period)
-        macd = fast_ema - slow_ema
-        middle, upper, lower = bollinger(closes, self.bb_period)
+        macd = (fast_ema - slow_ema) if (fast_ema is not None and slow_ema is not None) else None
+        upper_middle_lower = bollinger(closes, self.bb_period)
+        middle = upper_middle_lower[1] if upper_middle_lower is not None else None
         adx_val = adx(candles, self.adx_period)
 
-        if fast_ema > slow_ema and rsi_val >= Decimal("50") and macd >= 0 and closes[-1] >= middle and adx_val >= Decimal("20"):
+        if (
+            fast_ema is not None
+            and slow_ema is not None
+            and rsi_val is not None
+            and macd is not None
+            and middle is not None
+            and adx_val is not None
+            and fast_ema > slow_ema
+            and rsi_val >= 50
+            and macd >= 0
+            and closes[-1] >= middle
+            and adx_val >= 20
+        ):
             side, reason = SignalSide.BUY, [
                 "EMA bullish",
                 f"RSI={rsi_val:.1f} at or above 50",
@@ -64,7 +77,19 @@ class IndicatorStrategy(Strategy):
                 "price above Bollinger midline",
                 f"ADX={adx_val:.1f} confirms trend",
             ]
-        elif fast_ema < slow_ema and rsi_val < Decimal("50") and macd <= 0 and closes[-1] <= middle and adx_val >= Decimal("20"):
+        elif (
+            fast_ema is not None
+            and slow_ema is not None
+            and rsi_val is not None
+            and macd is not None
+            and middle is not None
+            and adx_val is not None
+            and fast_ema < slow_ema
+            and rsi_val < 50
+            and macd <= 0
+            and closes[-1] <= middle
+            and adx_val >= 20
+        ):
             side, reason = SignalSide.SELL, [
                 "EMA bearish",
                 f"RSI={rsi_val:.1f} below 50",
@@ -77,9 +102,11 @@ class IndicatorStrategy(Strategy):
 
         confidence = (
             min(0.99, 0.7 + float(abs(macd) / closes[-1]) * 10)
-            if side is not SignalSide.HOLD
+            if (side is not SignalSide.HOLD and macd is not None)
             else 0.0
         )
+        upper_v = upper_middle_lower[0] if upper_middle_lower is not None else None
+        lower_v = upper_middle_lower[2] if upper_middle_lower is not None else None
         return Signal(
             **base,
             side=side,
@@ -91,8 +118,8 @@ class IndicatorStrategy(Strategy):
                 "rsi": str(rsi_val),
                 "macd": str(macd),
                 "bb_middle": str(middle),
-                "bb_upper": str(upper),
-                "bb_lower": str(lower),
+                "bb_upper": str(upper_v),
+                "bb_lower": str(lower_v),
                 "adx": str(adx_val),
             },
         )

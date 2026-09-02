@@ -67,5 +67,7 @@ def test_testnet_requires_binance_credentials():
 
 
 def test_invalid_timeframe_is_rejected():
-    with pytest.raises(ValidationError, match="TIMEFRAME"):
-        Settings(_env_file=None, timeframe="2m")
+    # Truly invalid: empty, negative, nonsense units
+    for bad in ("", "0m", "-5m", "abc", "15", "1.5m"):
+        with pytest.raises(ValidationError, match="TIMEFRAME"):
+            Settings(_env_file=None, timeframe=bad)

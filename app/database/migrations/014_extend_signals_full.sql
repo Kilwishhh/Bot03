@@ -1,0 +1,4 @@
+-- Migration 014: handled programmatically by migration_runner.py
+-- (SQLite has no ADD COLUMN IF NOT EXISTS, so we use a Python loop with
+-- _exec_one to swallow "duplicate column name" errors).
+-- This file exists only so the migration manifest can reference it.

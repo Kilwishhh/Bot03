@@ -36,6 +36,14 @@ class StrategyLifecycle:
         confirmation_string: str = "",
     ) -> Strategy:
         """Attempt a state transition. Validates, writes audit trail, persists."""
+        # SIGNAL_PIPELINE_TEST is a system diagnostic — paper only, never testnet/live
+        if strategy.name == "SIGNAL_PIPELINE_TEST" and target_state in (
+            LifecycleState.LIVE, LifecycleState.LIVE_ELIGIBLE,
+        ):
+            raise errors.LiveDeploymentError(
+                "SIGNAL_PIPELINE_TEST is a system diagnostic strategy and "
+                "cannot be promoted to testnet or live."
+            )
         # System-triggered STOPPED is always allowed
         if target_state == LifecycleState.STOPPED:
             return self._do_transition(strategy, None, target_state, ctx, reason or "stopped")

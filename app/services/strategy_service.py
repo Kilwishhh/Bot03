@@ -23,6 +23,7 @@ from app.domain.strategy import (
     StrategyVersion,
     Timeframe,
 )
+from app.strategy.condition_engine import is_valid_timeframe
 
 
 class StrategyService:
@@ -42,7 +43,9 @@ class StrategyService:
         risk = RiskConfig.from_dict(payload.get("risk_config", {}))
         mode = ExecutionMode(payload.get("execution_mode", "paper"))
         venue = ExecutionVenue(payload.get("execution_venue", "binance"))
-        tf = Timeframe(payload.get("timeframe", "15m"))
+        tf = payload.get("timeframe", "15m")
+        if not is_valid_timeframe(tf):
+            raise errors.ValidationError(f"unsupported timeframe: {tf}")
 
         conn = self._conn()
         try:

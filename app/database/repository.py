@@ -261,6 +261,11 @@ class TradingRepository:
         with self._lock:
             self._connection.close()
 
+    @property
+    def db(self):
+        """Alias for the underlying sqlite3 connection (for raw execute calls)."""
+        return self._connection
+
 
 _default_repo: "TradingRepository | None" = None
 

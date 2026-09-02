@@ -34,7 +34,7 @@ class EMACrossoverStrategy(Strategy):
         if len(candles) < self.ema_slow + 1:
             return Signal(**base, side=SignalSide.HOLD, confidence=0.0, reason=["insufficient candles"])
 
-        closes = [c.close for c in candles]
+        closes = [float(c.close) for c in candles]
         fast_now = ema(closes, self.ema_fast)
         slow_now = ema(closes, self.ema_slow)
         fast_prev = ema(closes[:-1], self.ema_fast)

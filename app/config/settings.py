@@ -90,8 +90,9 @@ class Settings(BaseSettings):
     @classmethod
     def validate_market_defaults(cls, values):
         timeframe = values.get("TIMEFRAME", values.get("timeframe", "15m")) if isinstance(values, dict) else "15m"
-        if timeframe not in {"1m", "5m", "15m", "1h", "4h"}:
-            raise ValueError("TIMEFRAME must be one of 1m, 5m, 15m, 1h, or 4h")
+        from app.strategy.condition_engine import is_valid_timeframe
+        if not is_valid_timeframe(timeframe):
+            raise ValueError(f"TIMEFRAME must match ^[1-9][0-9]*[mhdwM]$: got {timeframe!r}")
         return values
 
     @model_validator(mode="after")

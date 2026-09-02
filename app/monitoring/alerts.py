@@ -11,13 +11,15 @@ class OperationalAlertManager:
         self._failure_threshold = failure_threshold
         self._cooldown_seconds = cooldown_seconds
         self._failures = 0
+        # Sentinel -inf so the first send within a process is never blocked by cooldown.
         self._last_sent: dict[str, float] = {}
 
     def _send(self, key: str, message: str) -> None:
         if self._notifier is None:
             return
         now = time.monotonic()
-        if now - self._last_sent.get(key, 0) < self._cooldown_seconds:
+        last = self._last_sent.get(key, float("-inf"))
+        if now - last < self._cooldown_seconds:
             return
         try:
             self._notifier.send(message)

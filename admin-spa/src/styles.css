@@ -93,9 +93,13 @@ input, select {
 .log-logger { color: var(--purple); flex-shrink: 0; min-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .log-msg { color: var(--text); word-break: break-all; }
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px; padding: 24px; width: 480px; max-width: 90vw; }
+.modal { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px; padding: 24px; width: 880px; max-width: 95vw; max-height: 90vh; overflow: auto; }
+.modal.modal-sm { width: 480px; }
 .modal h3 { margin-top: 0; }
 .modal label { display: block; margin: 8px 0 4px; color: var(--text-dim); font-size: 12px; }
 .modal input { width: 100%; }
 .modal .error { color: var(--red); font-size: 13px; margin-top: 8px; }
 .ok { color: var(--green); font-size: 13px; margin: 8px 0; }
+fieldset { border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin: 12px 0; }
+fieldset legend { color: var(--text-dim); font-size: 12px; text-transform: uppercase; padding: 0 6px; }
+.modal fieldset input, .modal fieldset select { width: 100%; }

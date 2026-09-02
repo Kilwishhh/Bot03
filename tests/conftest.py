@@ -2,7 +2,11 @@
 
 import os
 
-os.environ.setdefault("ADMIN_API_TOKEN", "test-admin-secret-token-12345")
+# Capture the canonical test token at module load — before any test has a chance
+# to override ADMIN_API_TOKEN.  This is the value we restore after every test.
+_ORIGINAL_ADMIN_TOKEN = os.environ.get(
+    "ADMIN_API_TOKEN", "test-admin-secret-token-12345"
+)
 os.environ.setdefault("CONTROL_API_TOKEN", "test-control-secret-token-67890")
 os.environ.setdefault("TRADING_MODE", "paper")
 os.environ.setdefault("DATABASE_PATH", ":memory:")
@@ -37,10 +41,11 @@ if not any("/dev/" in (r.path if hasattr(r, "path") else "")
            for r in (_router.routes if hasattr(_router, "routes") else [_router])):
     app.include_router(_dr.router)
 
-# Seed the canonical RSI Reversion test strategy in the session-temp DB so that
-# test files which use a module-level TestClient (e.g. test_strategy_test_001.py)
-# can resolve the strategy_id without going through the per-test `client` fixture.
-# The fixture below also seeds the per-test temp DB for files that use it.
+# Session DB is created with proper migrations at import time.
+# Per-test fixtures each get their own isolated temp DB via tmp_path.
+# We do NOT seed the session DB with hardcoded rows — that caused stale-schema
+# INSERT failures when migration 012 added new columns after the session DB
+# had already been seeded with the old schema.
 import sqlite3 as _sql_seed
 import uuid as _uuid_seed
 from datetime import datetime as _dt_seed
@@ -52,13 +57,12 @@ _SESSION_DB = os.environ["DATABASE_PATH"]
 _TEST_DB_PATH: str | None = None
 _session_conn = _sql_seed.connect(_SESSION_DB)
 try:
-    # Force schema creation by opening a repository on this DB
+    # Force schema creation + apply all migrations on this DB
     from app.database.repository import TradingRepository as _SeedRepo
     _SeedRepo(database_path=_SESSION_DB)
-    # Apply migrations so signal_followups and other extended tables exist
     from app.database.migration_runner import apply_migrations as _apply_mig
     _apply_mig(_session_conn)
-
+    # Seed canonical test strategy and user in the session DB
     _strat_id = "47ddb081-d9bb-454d-bc67-f715d96ef6c4"
     _user_id = str(_uuid_seed.uuid4())
     _now = _dt_seed.now().isoformat()
@@ -70,12 +74,16 @@ try:
     _session_conn.execute(
         "INSERT OR REPLACE INTO strategies "
         "(id, user_id, name, description, version, lifecycle_state, execution_mode, execution_venue, "
-        " market, timeframe, entry_config, exit_config, risk_config, template_name, template_params, "
-        " created_at, updated_at) "
+        "market, timeframe, entry_config, exit_config, risk_config, template_name, template_params, "
+        "created_at, updated_at, "
+        "universe_type, universe_config, confirmation_timeframes, "
+        "indicators_config, conditions_config, filters_config, confidence_config, notes) "
         "VALUES (?, ?, 'RSI Reversion 1M Test', 'E2E test fixture', 1, 'paper', 'paper', 'binance', "
         " 'BTCUSDT,ETHUSDT,SOLUSDT', '1m', '{}', "
         " '{\"tp1_pct\":0.003,\"stop_loss_pct\":0.005}', '{}', "
-        " 'rsi_reversion_1m_test', '{\"symbols\":[\"BTCUSDT\",\"ETHUSDT\",\"SOLUSDT\"]}', ?, ?)",
+        " 'rsi_reversion_1m_test', '{\"symbols\":[\"BTCUSDT\",\"ETHUSDT\",\"SOLUSDT\"]}', ?, ?, "
+        " 'custom_watchlist', '{\"symbols\":[\"BTCUSDT\",\"ETHUSDT\",\"SOLUSDT\"]}', '[]', "
+        " '[]', '{}', '{}', '{}', NULL)",
         (_strat_id, _user_id, _now, _now),
     )
     _session_conn.commit()
@@ -107,6 +115,11 @@ def client(tmp_path):
         _original_init(self, database_path)
 
     _r.TradingRepository.__init__ = _patched_init
+
+    # Clear the cached default repository so admin_routes re-creates it
+    # against the per-test temp DB (not the session DB from conftest import time).
+    import app.database.repository as _r2
+    _r2._default_repo = None
 
     # Ensure dev routes are registered (they may have been silently dropped at import
     # if a prior import step failed — add them here so TestClient sees them)
@@ -146,12 +159,16 @@ def client(tmp_path):
         _conn.execute(
             "INSERT OR REPLACE INTO strategies "
             "(id, user_id, name, description, version, lifecycle_state, execution_mode, execution_venue, "
-            " market, timeframe, entry_config, exit_config, risk_config, template_name, template_params, "
-            " created_at, updated_at) "
+            "market, timeframe, entry_config, exit_config, risk_config, template_name, template_params, "
+            "created_at, updated_at, "
+            "universe_type, universe_config, confirmation_timeframes, "
+            "indicators_config, conditions_config, filters_config, confidence_config, notes) "
             "VALUES (?, ?, 'RSI Reversion 1M Test', 'E2E test fixture', 1, 'paper', 'paper', 'binance', "
             " 'BTCUSDT,ETHUSDT,SOLUSDT', '1m', '{}', "
             " '{\"tp1_pct\":0.003,\"stop_loss_pct\":0.005}', '{}', "
-            " 'rsi_reversion_1m_test', '{\"symbols\":[\"BTCUSDT\",\"ETHUSDT\",\"SOLUSDT\"]}', ?, ?)",
+            " 'rsi_reversion_1m_test', '{\"symbols\":[\"BTCUSDT\",\"ETHUSDT\",\"SOLUSDT\"]}', ?, ?, "
+            " 'custom_watchlist', '{\"symbols\":[\"BTCUSDT\",\"ETHUSDT\",\"SOLUSDT\"]}', '[]', "
+            " '[]', '{}', '{}', '{}', NULL)",
             (_strat_id, _user_id, _now, _now),
         )
         _conn.commit()
@@ -167,12 +184,17 @@ def client(tmp_path):
 
 @pytest.fixture(autouse=True)
 def _reset_remote_control_flag():
-    """Restore ENABLE_REMOTE_CONTROL=false before every test.
+    """Restore ENABLE_REMOTE_CONTROL=false AND ADMIN_API_TOKEN before every test.
 
-    Some test modules (e.g. test_e2e_ermis.py) flip this flag to "true" to
-    exercise the /control/* routes; without this autouse fixture the override
-    leaks into later tests and breaks test_remote_control_is_disabled_by_default.
+    Some test modules (e.g. test_e2e_ermis.py) flip ENABLE_REMOTE_CONTROL to "true"
+    to exercise the /control/* routes; test_admin_state_machine.py sets
+    ADMIN_API_TOKEN to a custom value for its auth bypass fixture. Without this
+    autouse fixture the overrides leak into later tests and break token
+    verification.
     """
+    _original_admin_token = _ORIGINAL_ADMIN_TOKEN
     os.environ["ENABLE_REMOTE_CONTROL"] = "false"
+    os.environ["ADMIN_API_TOKEN"] = _original_admin_token
     yield
     os.environ["ENABLE_REMOTE_CONTROL"] = "false"
+    os.environ["ADMIN_API_TOKEN"] = _original_admin_token

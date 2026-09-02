@@ -5,8 +5,9 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.dependencies import get_access_context
 from app.core.rbac import AccessContext
 from app.database.repository import TradingRepository
 from app.exchange.models import Candle, OrderRequest, OrderSide, OrderType
@@ -780,3 +781,130 @@ async def dev_result(strategy_id: str) -> dict:
             "losses": losses,
         },
     }
+
+
+@router.get("/stats")
+async def get_stats(ctx: AccessContext = Depends(get_access_context)):
+    """
+    Aggregate dashboard stats: counts + PnL across all strategies.
+    """
+    repo = TradingRepository()
+
+    strategies_rows = repo.db.execute("SELECT id FROM strategies").fetchall()
+    signals = repo.db.execute(
+        "SELECT COUNT(*) FROM signals WHERE created_at >= date('now')"
+    ).fetchone()[0]
+    positions = repo.db.execute(
+        "SELECT COUNT(*) FROM positions"
+    ).fetchone()[0]
+    closed_trades = repo.db.execute(
+        "SELECT COUNT(*) FROM trades WHERE exit_time IS NOT NULL"
+    ).fetchone()[0]
+    closed_today = repo.db.execute(
+        "SELECT COUNT(*) FROM trades WHERE exit_time >= date('now')"
+    ).fetchone()[0]
+
+    daily_pnl = repo.db.execute(
+        "SELECT COALESCE(SUM(realized_pnl), 0) FROM trades WHERE exit_time >= date('now')"
+    ).fetchone()[0] or 0.0
+    total_pnl = repo.db.execute(
+        "SELECT COALESCE(SUM(realized_pnl), 0) FROM trades"
+    ).fetchone()[0] or 0.0
+
+    return {
+        "total_strategies": len(strategies_rows),
+        "total_signals": signals,
+        "open_positions": positions,
+        "closed_trades": closed_trades,
+        "closed_today": closed_today,
+        "daily_pnl": round(float(daily_pnl), 4),
+        "total_pnl": round(float(total_pnl), 4),
+        "daily_realized_pnl": round(float(daily_pnl), 4),
+        "total_realized_pnl": round(float(total_pnl), 4),
+    }
+
+
+# ── Paper Config proxy (maps between SPA field names and internal config) ──────
+
+def _paper_defaults():
+    return {
+        "paper_starting_balance": 10000.0,
+        "paper_position_notional": 10.0,
+        "max_leverage": 10,
+        "risk_per_trade": 0.01,
+        "max_open_positions": 3,
+        "min_signal_confidence": 0.10,
+        "max_daily_loss": 500.0,
+        "max_drawdown_pct": 20.0,
+        "tp_pct": 0.30,
+        "sl_pct": 0.50,
+    }
+
+
+def _load_paper_raw():
+    from pathlib import Path
+    import json as _json
+    cfg = Path(__file__).resolve().parent.parent.parent.parent / "paper_config.json"
+    if cfg.exists():
+        try:
+            return _json.loads(cfg.read_text())
+        except Exception:
+            pass
+    return _paper_defaults()
+
+
+def _save_paper_raw(cfg: dict) -> None:
+    from pathlib import Path
+    import json as _json
+    cfg_file = Path(__file__).resolve().parent.parent.parent.parent / "paper_config.json"
+    cfg_file.write_text(_json.dumps(cfg, indent=2))
+
+
+@router.get("/paper-config")
+def get_paper_config_proxy(ctx: AccessContext = Depends(get_access_context)):
+    """
+    Proxy for paper config — maps internal format to SPA field names.
+    GET /paper-config  →  { balance, leverage, trade_size_pct, max_positions, ... }
+    """
+    ctx.require_admin()
+    raw = _load_paper_raw()
+    return {
+        "current_balance": raw.get("paper_starting_balance", 10000.0),
+        "config": {
+            "balance": raw.get("paper_starting_balance", 10000.0),
+            "leverage": raw.get("max_leverage", 10),
+            "trade_size_pct": round(raw.get("risk_per_trade", 0.01) * 100, 2),   # 1% → 1
+            "max_positions": raw.get("max_open_positions", 5),
+            "max_daily_loss": raw.get("max_daily_loss", 500.0),
+            "max_drawdown_pct": raw.get("max_drawdown_pct", 20.0),
+            "tp_pct": raw.get("tp_pct", 0.30),
+            "sl_pct": raw.get("sl_pct", 0.50),
+        },
+    }
+
+
+@router.post("/paper-config")
+def post_paper_config_proxy(
+    body: dict,
+    ctx: AccessContext = Depends(get_access_context),
+):
+    """
+    Proxy for paper config — maps SPA field names to internal config and saves.
+    Accepts: { balance, leverage, trade_size_pct, max_positions, ... }
+    """
+    ctx.require_admin()
+    balance = float(body.get("balance", 10000))
+    trade_pct = float(body.get("trade_size_pct", 1.0))
+    internal = {
+        "paper_starting_balance": balance,
+        "paper_position_notional": round(trade_pct / 100 * balance, 4),
+        "max_leverage": int(body.get("leverage", 10)),
+        "risk_per_trade": round(trade_pct / 100, 6),
+        "max_open_positions": int(body.get("max_positions", 5)),
+        "max_daily_loss": float(body.get("max_daily_loss", 500.0)),
+        "max_drawdown_pct": float(body.get("max_drawdown_pct", 20.0)),
+        "tp_pct": float(body.get("tp_pct", 0.30)),
+        "sl_pct": float(body.get("sl_pct", 0.50)),
+    }
+    _save_paper_raw(internal)
+    return {"ok": True, "config": body}

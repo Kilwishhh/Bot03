@@ -41,11 +41,11 @@ class RSIMeanReversionStrategy(Strategy):
         if len(candles) < self.period + 1:
             return Signal(**base, side=SignalSide.HOLD, confidence=0.0, reason=["insufficient candles"])
 
-        closes = [c.close for c in candles]
+        closes = [float(c.close) for c in candles]
         value = rsi(closes, self.period)
 
         if value < self.oversold:
-            confidence = min(0.95, 0.7 + float((self.oversold - value) / Decimal("100")))
+            confidence = min(0.95, 0.7 + float((float(self.oversold) - value) / 100))
             return Signal(
                 **base,
                 side=SignalSide.BUY,
@@ -54,7 +54,7 @@ class RSIMeanReversionStrategy(Strategy):
                 metadata={"rsi": str(value)},
             )
         if value > self.overbought:
-            confidence = min(0.95, 0.7 + float((value - self.overbought) / Decimal("100")))
+            confidence = min(0.95, 0.7 + float((value - float(self.overbought)) / 100))
             return Signal(
                 **base,
                 side=SignalSide.SELL,

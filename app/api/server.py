@@ -1,6 +1,7 @@
 """Safe HTTP API foundation for the mobile application."""
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -184,6 +185,53 @@ def landing() -> FileResponse:
 def health() -> dict[str, object]:
     settings = Settings()
     return {"healthy": True, "mode": settings.trading_mode.value, "live_trading_enabled": settings.enable_live_trading}
+
+
+# Paper config proxy — maps internal config to SPA field names
+@app.get("/paper-config")
+def get_paper_config() -> dict:
+    from app.api.routes.dev_routes import _load_paper_raw
+    raw = _load_paper_raw()
+    return {
+        "current_balance": raw.get("paper_starting_balance", 10000.0),
+        "config": {
+            "balance": raw.get("paper_starting_balance", 10000.0),
+            "leverage": raw.get("max_leverage", 10),
+            "trade_size_pct": round(raw.get("risk_per_trade", 0.01) * 100, 2),
+            "max_positions": raw.get("max_open_positions", 5),
+            "max_daily_loss": raw.get("max_daily_loss", 500.0),
+            "max_drawdown_pct": raw.get("max_drawdown_pct", 20.0),
+            "tp_pct": raw.get("tp_pct", 0.30),
+            "sl_pct": raw.get("sl_pct", 0.50),
+        },
+    }
+
+
+@app.post("/paper-config")
+async def post_paper_config(request: Request) -> dict:
+    from app.api.routes.dev_routes import _save_paper_raw
+    raw_body = await request.body()
+    body = json.loads(raw_body or b"{}")
+    balance = float(body.get("balance", 10000))
+    trade_pct = float(body.get("trade_size_pct", 1.0))
+    internal = {
+        "paper_starting_balance": balance,
+        "paper_position_notional": round(trade_pct / 100 * balance, 4),
+        "max_leverage": int(body.get("leverage", 10)),
+        "risk_per_trade": round(trade_pct / 100, 6),
+        "max_open_positions": int(body.get("max_positions", 5)),
+        "max_daily_loss": float(body.get("max_daily_loss", 500.0)),
+        "max_drawdown_pct": float(body.get("max_drawdown_pct", 20.0)),
+        "tp_pct": float(body.get("tp_pct", 0.30)),
+        "sl_pct": float(body.get("sl_pct", 0.50)),
+    }
+    _save_paper_raw(internal)
+    return {"ok": True, "config": body}
+
+
+@app.post("/admin/config")
+async def admin_config_override(request: Request) -> dict:
+    return await post_paper_config(request)
 
 
 @app.get("/status")

@@ -24,7 +24,7 @@ def _serialize(s) -> dict:
         "version": s.version, "lifecycle_state": s.lifecycle_state.value,
         "execution_mode": s.execution_mode.value,
         "execution_venue": s.execution_venue.value,
-        "market": s.market, "timeframe": s.timeframe.value,
+        "market": s.market, "timeframe": s.timeframe.value if hasattr(s.timeframe, "value") else s.timeframe,
         "entry_config": s.entry_config.to_dict(),
         "exit_config": s.exit_config.to_dict(),
         "risk_config": s.risk_config.to_dict(),
@@ -104,8 +104,11 @@ def update_strategy(
             from app.domain.strategy import ExecutionVenue
             s.execution_venue = ExecutionVenue(payload["execution_venue"])
         if "timeframe" in payload:
-            from app.domain.strategy import Timeframe
-            s.timeframe = Timeframe(payload["timeframe"])
+            from app.strategy.condition_engine import is_valid_timeframe as ivt
+            from app.core.errors import ValidationError
+            if not ivt(payload["timeframe"]):
+                raise ValidationError(f"unsupported timeframe: {payload['timeframe']}")
+            s.timeframe = payload["timeframe"]
         return _serialize(svc.update(s, ctx))
     except (NotFoundError, ForbiddenError) as e:
         raise HTTPException(status_code=e.http_status, detail=e.message)

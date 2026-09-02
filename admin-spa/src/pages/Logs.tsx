@@ -29,8 +29,10 @@ export default function Logs() {
   useEffect(() => {
     load()
     if (!auto) return
-    const id = setInterval(load, 3000)
-    return () => clearInterval(id)
+    const onVisibility = () => { if (!document.hidden) load() }
+    document.addEventListener('visibilitychange', onVisibility)
+    const id = setInterval(load, 15000)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisibility) }
   }, [auto])
 
   useEffect(() => {

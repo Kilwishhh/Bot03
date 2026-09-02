@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS strategies (
                     CHECK (execution_venue IN ('binance','hyperliquid','walletconnect')),
     market          TEXT NOT NULL,
     timeframe       TEXT NOT NULL DEFAULT '15m'
-                    CHECK (timeframe IN ('1m','5m','15m','1h','4h','1d')),
+                    CHECK (timeframe IN ('1m','3m','5m','7m','10m','15m','20m','30m','45m','90m','1h','2h','4h','6h','8h','12h','1d','3d','1w','1M')),
     entry_config    TEXT NOT NULL DEFAULT '{}',
     exit_config     TEXT NOT NULL DEFAULT '{}',
     risk_config     TEXT NOT NULL DEFAULT '{}',

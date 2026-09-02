@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { getToken, setToken, clearToken, getBase, setBase, api } from './api'
+import { getToken, setToken, clearToken, api } from './api'
 import Dashboard from './pages/Dashboard'
 import Logs from './pages/Logs'
 import Users from './pages/Users'
@@ -12,19 +12,13 @@ import PaperConfig from './pages/PaperConfig'
 import Risk from './pages/Risk'
 import Settings from './pages/Settings'
 
-const BASE_KEY = 'mk_api_base'
-function saveBase(b: string) { localStorage.setItem(BASE_KEY, b) }
-function loadBase(): string { return localStorage.getItem(BASE_KEY) || (import.meta.env.DEV ? '' : 'http://localhost:8000') }
-
 function Login() {
   const [tok, setTokInput] = useState('')
-  const [base, setBaseInput] = useState(loadBase())
   const [err, setErr] = useState('')
   const navigate = useNavigate()
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErr('')
-    saveBase(base)
     setToken(tok)
     try {
       await api('/admin/users', { query: { limit: 1 } })
@@ -38,10 +32,8 @@ function Login() {
     <div className="login">
       <form onSubmit={submit}>
         <h2>MK Trader Admin</h2>
-        <label>API base</label>
-        <input value={base} onChange={e => setBaseInput(e.target.value)} placeholder="(empty in dev = same origin)" />
         <label>Admin token</label>
-        <input type="password" value={tok} onChange={e => setTokInput(e.target.value)} placeholder="X-Admin-Token" />
+        <input type="password" value={tok} onChange={e => setTokInput(e.target.value)} placeholder="X-Admin-Token" autoFocus />
         {err && <div className="error">{err}</div>}
         <button type="submit">Sign in</button>
       </form>
@@ -90,9 +82,37 @@ function Shell() {
 }
 
 export default function App() {
-  const [authed, setAuthed] = useState(!!getToken())
+  const [authed, setAuthed] = useState(false)
+  const [checking, setChecking] = useState(true)
   const loc = useLocation()
-  useEffect(() => { setAuthed(!!getToken()) }, [loc.pathname])
+
+  // Validate ONCE on mount. Do NOT re-validate on route changes — that causes
+  // the "refresh kicks me to /login" bug. Each page handles its own API errors.
+  useEffect(() => {
+    let cancelled = false
+    const validate = async () => {
+      const tok = getToken()
+      if (!tok) {
+        if (!cancelled) { setAuthed(false); setChecking(false) }
+        return
+      }
+      try {
+        await api('/admin/users', { query: { limit: 1 } })
+        if (!cancelled) { setAuthed(true); setChecking(false) }
+      } catch {
+        if (!cancelled) {
+          clearToken()
+          setAuthed(false)
+          setChecking(false)
+        }
+      }
+    }
+    validate()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])  // <-- empty deps = only on mount (initial page load / hard refresh)
+
+  if (checking) return <div className="loading">Loading…</div>
   if (!authed && loc.pathname !== '/login') return <Navigate to="/login" />
   if (authed && loc.pathname === '/login') return <Navigate to="/dashboard" />
   return (

@@ -43,7 +43,7 @@ class BollingerStrategy(Strategy):
         if len(candles) < self.period:
             return Signal(**base, side=SignalSide.HOLD, confidence=0.0, reason=["insufficient candles"])
 
-        closes = [c.close for c in candles]
+        closes = [float(c.close) for c in candles]
         middle, upper, lower = bollinger(closes, self.period, self.std_multiplier)
         last = closes[-1]
 

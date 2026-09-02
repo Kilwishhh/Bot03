@@ -63,9 +63,5 @@ def get_config() -> dict:
     return get_paper_config()
 
 
-@router.post("/config")
-def post_config(cfg: PaperConfig) -> dict:
-    """Update paper trading configuration. Changes apply to next trading cycle."""
-    validated = cfg.model_dump()
-    _save(validated)
-    return validated
+# NOTE: /admin/config POST is overridden by app.api.server (paper-config proxy)
+# to accept the SPA field name format.
