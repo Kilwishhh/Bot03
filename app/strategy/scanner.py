@@ -401,6 +401,13 @@ class StrategyScanner:
             "signals_persisted": 0,
             "last_scan": None,
         }
+        # P0-04: per-cycle CONDITIONS_FAILED aggregator (suppresses per-symbol noise)
+        self._cycle_fail_count: int = 0
+        self._cycle_fail_samples: list[tuple[str, str, list[str]]] = []
+        self._cycle_fail_sample_max: int = 5
+        # P0-04: MINIMUM_HITS_NOT_MET aggregator
+        self._cycle_min_hits_count: int = 0
+        self._cycle_min_hits_samples: list[tuple[str, str, int, int]] = []
 
     @property
     def diagnostics(self) -> ScannerDiagnostics:
@@ -465,6 +472,27 @@ class StrategyScanner:
             "[SCAN] scan_completed strategies=%d total_symbols=%d signals=%d",
             len(strategies), total_syms, len(signals),
         )
+        # P0-04: emit cycle summary for CONDITIONS_FAILED + MINIMUM_HITS_NOT_MET
+        # instead of per-symbol noise, then reset counters for next cycle.
+        if self._cycle_fail_count > 0 or self._cycle_min_hits_count > 0:
+            samples = []
+            for sname, sym, reasons in self._cycle_fail_samples:
+                samples.append(f"{sname}/{sym}: {reasons}")
+            for sname, sym, hits, required in self._cycle_min_hits_samples:
+                samples.append(f"{sname}/{sym}: hits={hits} < required={required}")
+            logger.info(
+                "[SCAN] conditions_not_met summary: "
+                "CONDITIONS_FAILED=%d MINIMUM_HITS_NOT_MET=%d "
+                "sample_reasons=[%s]",
+                self._cycle_fail_count,
+                self._cycle_min_hits_count,
+                "; ".join(samples),
+            )
+        # Reset for next cycle
+        self._cycle_fail_count = 0
+        self._cycle_fail_samples.clear()
+        self._cycle_min_hits_count = 0
+        self._cycle_min_hits_samples.clear()
         return signals
 
     def _scan_strategy(self, strat: StrategyRuntime) -> list[ScannerSignal]:
@@ -629,19 +657,18 @@ class StrategyScanner:
         self._diag.record_conditions(hits, max(1, total_conds))
 
         if not matched:
-            logger.debug(
-                "[EVAL] strategy=%s symbol=%s CONDITIONS_FAILED reasons=%s",
-                strat.name, symbol, reasons,
-            )
+            # P0-04: aggregate per-cycle; suppress per-symbol DEBUG spam.
+            self._cycle_fail_count += 1
+            if len(self._cycle_fail_samples) < self._cycle_fail_sample_max:
+                self._cycle_fail_samples.append((strat.name, symbol, list(reasons)))
             return None
 
         # P0-02: enforce minimum_hits threshold from paper config
         if hits < self._minimum_hits:
-            logger.debug(
-                "[EVAL] strategy=%s symbol=%s MINIMUM_HITS_NOT_MET "
-                "hits=%d required=%d — signal suppressed",
-                strat.name, symbol, hits, self._minimum_hits,
-            )
+            # P0-04: aggregate per-cycle; suppress per-symbol DEBUG spam.
+            self._cycle_min_hits_count += 1
+            if len(self._cycle_min_hits_samples) < self._cycle_fail_sample_max:
+                self._cycle_min_hits_samples.append((strat.name, symbol, hits, self._minimum_hits))
             return None
 
         # Get entry price
