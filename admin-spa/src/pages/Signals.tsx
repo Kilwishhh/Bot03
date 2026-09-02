@@ -45,6 +45,22 @@ export default function Signals() {
   const fmt = (v: any) => v ? new Date(v).toLocaleString() : '—'
   const fmtPrice = (v: any) => v != null ? parseFloat(v).toFixed(6) : '—'
 
+  // Confidence: display as N/M (hits/total). Fall back to legacy float only when
+  // the new columns are absent (very old rows).
+  const fmtConfidence = (s: any) => {
+    const hits = s.confidence_hits
+    const total = s.confidence_total
+    if (hits != null && total != null && total > 0) {
+      return `${hits}/${total}`
+    }
+    if (s.confidence != null) {
+      // Legacy rows: 0.65 → "6.5/10" only as a degraded fallback.
+      const pct = Math.round(parseFloat(s.confidence) * 100)
+      return `${pct}/100`
+    }
+    return '—'
+  }
+
   return (
     <div>
       <h2 className="page-title">Signals</h2>
@@ -78,7 +94,7 @@ export default function Signals() {
                 <td>{fmtPrice(s.stop_loss)}</td>
                 <td>{STATUS_BADGE(s.signal_status || s.status)}</td>
                 <td>{STATUS_BADGE(s.trading_status)}</td>
-                <td>{s.confidence != null ? `${Math.round(s.confidence)}%` : '—'}</td>
+                <td className="mono">{fmtConfidence(s)}</td>
                 <td className="muted">{fmt(s.created_at)}</td>
               </tr>
             ))}

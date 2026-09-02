@@ -102,6 +102,18 @@ def apply_migrations(conn: sqlite3.Connection, dry_run: bool = False) -> list[st
             applied.append(name)
             continue
 
+        if name == "015_condition_confidence" and not dry_run:
+            # Idempotent: add confidence_hits and confidence_total columns.
+            with conn:
+                _exec_one(conn, "ALTER TABLE signals ADD COLUMN confidence_hits INTEGER")
+                _exec_one(conn, "ALTER TABLE signals ADD COLUMN confidence_total INTEGER")
+                conn.execute(
+                    "INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)",
+                    (name, _now_iso()),
+                )
+            applied.append(name)
+            continue
+
         if not dry_run:
             with conn:  # transaction context — commits on success
                 conn.executescript(sql)

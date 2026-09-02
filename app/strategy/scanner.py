@@ -28,6 +28,7 @@ from app.exchange.models import Candle
 from app.market_data.base import MarketDataProvider
 from app.strategy.condition_engine import (
     evaluate_condition_groups,
+    evaluate_condition_groups_with_results,
     validate_condition_config,
 )
 from app.strategy.indicators import compute_indicators, get_timeframe_minutes, price as price_indicator
@@ -268,6 +269,8 @@ class ScannerSignal:
     indicators: dict[str, Any]
     candle_close_time: str
     candle_age_seconds: float
+    confidence_hits: int = 0
+    confidence_total: int = 0
 
 
 def _compute_tp_sl(
@@ -540,12 +543,13 @@ class StrategyScanner:
         self._diag.record_indicator()
 
         # Evaluate entry conditions
-        matched, reasons = evaluate_condition_groups(
+        matched, reasons, cond_results = evaluate_condition_groups_with_results(
             strat.conditions_config, values, prev_values
         )
 
         total_conds = _count_conditions(strat.conditions_config)
-        self._diag.record_conditions(1 if matched else 0, max(1, total_conds))
+        hits = sum(1 for c in cond_results if c.passed)
+        self._diag.record_conditions(hits, max(1, total_conds))
 
         if not matched:
             logger.debug(
@@ -602,6 +606,8 @@ class StrategyScanner:
             indicators=values,
             candle_close_time=str(candle_time),
             candle_age_seconds=age,
+            confidence_hits=hits,
+            confidence_total=total_conds,
         )
 
         self._diag.record_signal_created()
@@ -646,6 +652,8 @@ class StrategyScanner:
                     "take_profit": sig.take_profit,
                     "stop_loss": sig.stop_loss,
                     "confidence": sig.confidence,
+                    "confidence_hits": sig.confidence_hits,
+                    "confidence_total": sig.confidence_total,
                     "mode": sig.mode,
                     "reasons": "; ".join(sig.reasons),
                     "reason": "; ".join(sig.reasons),  # back-compat column
@@ -670,15 +678,22 @@ class StrategyScanner:
                     tuple(row.values()),
                 )
             else:
-                # Legacy 6-column signals table
+                # Legacy 6-column signals table — extend if confidence_hits/total columns exist
+                has_conf_hits = "confidence_hits" in cols
+                has_mode = "mode" in cols
+                row_vals = [sig.symbol, sig.side, sig.confidence,
+                            datetime.now(UTC).isoformat(), sig.strategy_name,
+                            "; ".join(sig.reasons)]
+                row_cols = ["symbol", "side", "confidence", "timestamp", "strategy", "reason"]
+                if has_conf_hits:
+                    row_cols += ["confidence_hits", "confidence_total"]
+                    row_vals += [sig.confidence_hits, sig.confidence_total]
+                if has_mode:
+                    row_cols.append("mode")
+                    row_vals.append(sig.mode)
                 conn.execute(
-                    "INSERT INTO signals (symbol, side, confidence, timestamp, strategy, reason) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        sig.symbol, sig.side, sig.confidence,
-                        datetime.now(UTC).isoformat(), sig.strategy_name,
-                        "; ".join(sig.reasons),
-                    ),
+                    f"INSERT INTO signals ({', '.join(row_cols)}) VALUES ({', '.join('?' * len(row_cols))})",
+                    tuple(row_vals),
                 )
             self._diag.record_signal_persisted()
             self._stats["signals_persisted"] += 1

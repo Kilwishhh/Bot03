@@ -1230,7 +1230,8 @@ def admin_list_signals(
     select_cols = [c for c in cols if c in (
         "signal_id", "id", "strategy_id", "strategy_name", "strategy",
         "symbol", "side", "timeframe", "entry", "take_profit", "stop_loss",
-        "confidence", "mode", "reasons", "reason", "indicators",
+        "confidence", "confidence_hits", "confidence_total",
+        "mode", "reasons", "reason", "indicators",
         "candle_close_time", "status", "trading_status",
         "timestamp", "created_at", "updated_at",
     )]

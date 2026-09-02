@@ -1,0 +1,2 @@
+-- Migration 015: handled programmatically by migration_runner.py
+-- Adds confidence_hits and confidence_total columns to signals table.

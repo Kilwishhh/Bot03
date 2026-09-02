@@ -9,4 +9,5 @@ MIGRATIONS: list[str] = [
     "012_extend_strategies",
     "013_relax_timeframe_check",
     "014_extend_signals_full",
+    "015_condition_confidence",
 ]

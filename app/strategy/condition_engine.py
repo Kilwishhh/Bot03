@@ -26,6 +26,7 @@ from __future__ import annotations
 import math
 import operator
 import re
+from dataclasses import dataclass
 from typing import Any, Callable
 
 # -------------------------------------------------------------------------------------------------------------------------------------------
@@ -199,6 +200,53 @@ def evaluate_condition_groups(
         matched = all(ok for ok, _ in group_results)
         reasons = [msg for ok, msg in group_results if ok]
         return matched, reasons if reasons else ["all conditions failed"]
+
+
+@dataclass
+class ConditionResult:
+    field: str
+    passed: bool
+    reason: str
+
+
+def evaluate_condition_groups_with_results(
+    config: dict[str, Any] | None,
+    values: dict[str, float | None],
+    prev_values: dict[str, float | None] | None = None,
+) -> tuple[bool, list[str], list[ConditionResult]]:
+    """Evaluate conditions and return per-condition hit details.
+
+    Returns (matched: bool, reasons: list[str], condition_results: list[ConditionResult]).
+    Used for confidence reporting (N/M hits).
+    """
+    if not config:
+        return True, ["no conditions configured"], []
+
+    logic = (config.get("logic") or "all").lower()
+    groups = config.get("groups", [])
+
+    if not groups:
+        return True, ["no condition groups"], []
+
+    condition_results: list[ConditionResult] = []
+    group_results: list[tuple[bool, str]] = []
+
+    for grp in groups:
+        conditions = grp.get("conditions", [])
+        for cond in conditions:
+            passed, reason = evaluate_condition(cond, values, prev_values)
+            field = str(cond.get("field", "")).upper()
+            condition_results.append(ConditionResult(field=field, passed=passed, reason=reason))
+        group_results.append(evaluate_group(grp, values, prev_values))
+
+    if logic == "any":
+        matched = any(ok for ok, _ in group_results)
+        reasons = [msg for ok, msg in group_results if ok]
+        return matched, reasons if reasons else ["no group matched"], condition_results
+    else:
+        matched = all(ok for ok, _ in group_results)
+        reasons = [msg for ok, msg in group_results if ok]
+        return matched, reasons if reasons else ["all conditions failed"], condition_results
 
 
 # ---------------------------------------------------------------------------
