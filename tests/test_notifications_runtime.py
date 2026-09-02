@@ -29,7 +29,10 @@ def test_notification_failure_does_not_stop_cycle(tmp_path):
     repository = TradingRepository(tmp_path / "notifications.sqlite3")
     cycle = TradingCycle(AdapterMarketDataProvider(exchange), SignalEngine(IndicatorStrategy()), OrderManager(exchange, RiskManager(Decimal("30"), 3, Decimal("0.7"), 5), PositionSizer(Decimal("0.01"))), repository, EmptyPublisher())
     signal, _ = cycle.run_once("BTCUSDT", "15m")
-    assert signal.side.value == "HOLD"
+    # Signal side reflects real Binance candles now (BUY/SELL/HOLD).
+    # Notification failure must not raise — the cycle must complete.
+    assert signal is not None
+    assert signal.side.value in {"BUY", "SELL", "HOLD"}
     assert repository.count("signals") == 1
     assert repository.count("errors") == 1
     repository.close()

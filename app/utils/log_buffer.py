@@ -18,17 +18,32 @@ class _LogBuffer(logging.Handler):
         super().__init__()
         self._records: list[dict] = []
         self._lock = Lock()
+        # Dedupe window: records with same (logger, level, msg) within this
+        # many seconds collapse into one entry. Prevents duplicate entries when
+        # a logger AND its parent (e.g. app.* + root) both carry this handler.
+        self._dedupe_window_s = 0.5
 
     def emit(self, record: logging.LogRecord) -> None:
-        # Drop DEBUG noise from uvicorn.access
-        if record.name == "uvicorn.access" and record.levelno < logging.INFO:
+        # Drop all uvicorn logs — they duplicate uvicorn's own logging.
+        # Both 'uvicorn.access' and 'uvicorn.error' propagate to the root logger,
+        # so we must block both here to prevent duplicate entries.
+        if record.name in ("uvicorn.access", "uvicorn.error"):
             return
+        msg = record.getMessage()
+        ts = record.created
         with self._lock:
+            # If a sibling logger (parent) just captured the same record, skip.
+            for prev in reversed(self._records[-5:]):
+                if (ts - float(prev["_ts"])) > self._dedupe_window_s:
+                    break
+                if prev["logger"] == record.name and prev["level"] == record.levelname and prev["msg"] == msg:
+                    return
             self._records.append({
-                "ts": datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec="milliseconds"),
+                "_ts": ts,
+                "ts": datetime.fromtimestamp(ts, tz=UTC).isoformat(timespec="milliseconds"),
                 "level": record.levelname,
                 "logger": record.name,
-                "msg": record.getMessage(),
+                "msg": msg,
             })
             if len(self._records) > MAX_ENTRIES:
                 self._records = self._records[-MAX_ENTRIES:]

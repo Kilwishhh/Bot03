@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from app.api.routes.config_routes import get_paper_config
 from app.api.ws_broker import publish_event
 from app.config import Settings
-from app.database import TradingRepository
+from app.database import TradingRepository, get_default_repository
 from app.exchange import create_exchange
 from app.execution import OrderManager
 from app.market_data import AdapterMarketDataProvider
@@ -115,6 +115,15 @@ def control_start(
         raise HTTPException(status_code=400, detail="interval must be positive")
     if _controller["thread"] is not None and _controller["thread"].is_alive():
         raise HTTPException(status_code=409, detail="bot already running")
+
+    # Recover from stale 'running' state — the previous worker thread died without
+    # calling set_control_state("stopped") (e.g. crash, OOM, SIGKILL).
+    # Treat any 'running' state with no live thread as stopped.
+    repo_check = get_default_repository()
+    prev = repo_check.control_state()
+    if prev and prev[0] == "running":
+        _controller["thread"] = None  # ensure clean slate
+        repo_check.set_control_state("stopped")
 
     try:
         exchange = create_exchange(settings)

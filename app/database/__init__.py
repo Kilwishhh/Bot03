@@ -1,3 +1,3 @@
-from .repository import TradingRepository
+from .repository import TradingRepository, get_default_repository
 
-__all__ = ["TradingRepository"]
+__all__ = ["TradingRepository", "get_default_repository"]

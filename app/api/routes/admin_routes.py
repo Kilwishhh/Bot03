@@ -321,6 +321,18 @@ def admin_control_action(
     repo = get_default_repository()
 
     if action == "start":
+        # Recover from stale 'running' state — the previous worker thread died
+        # without updating control_state (e.g. crash, OOM, process killed).
+        # Treat any 'running' row with no live thread as stopped.
+        prev = repo.control_state()
+        prev_state = prev[0] if prev else "stopped"
+        prev_thread_alive = _controller.get("thread") is not None and _controller["thread"].is_alive()
+        if prev_state == "running" and not prev_thread_alive:
+            try:
+                repo.set_control_state("stopped")
+            except Exception:
+                pass
+            prev_state = "stopped"
         if _controller.get("thread") is not None and _controller["thread"].is_alive():
             return {"action": "start", "state": "running", "already": True}
         # Use the new multi-symbol scanner path
