@@ -49,6 +49,7 @@ class PaperTradingAdapter(ExchangeAdapter):
                     open=Decimal(row[1]), high=Decimal(row[2]),
                     low=Decimal(row[3]), close=Decimal(row[4]),
                     close_time=datetime.fromtimestamp(row[6] / 1000, UTC),
+                    volume=Decimal(row[5]),
                 )
                 for row in rows
             ]
