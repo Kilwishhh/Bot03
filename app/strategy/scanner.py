@@ -106,13 +106,59 @@ def _get_candles_for_timeframe(
     return _aggregate_candles(raw, minutes)
 
 
-def _candle_age_seconds(candle: Candle) -> float:
-    """Age of a candle's close_time in seconds relative to UTC now."""
-    now = datetime.now(UTC)
+def _candle_age_seconds(candle: Candle, now: datetime | None = None) -> float:
+    """Age of a candle's close_time in seconds relative to UTC now.
+
+    Binance semantics: close_time is EXCLUSIVE end of the interval.
+    A candle is CLOSED when now >= close_time (age >= 0).
+    A candle is IN-PROGRESS when now < close_time (age < 0).
+
+    `now` is injectable for testing. Defaults to datetime.now(UTC).
+    """
+    if now is None:
+        now = datetime.now(UTC)
     ct = candle.close_time
     if ct.tzinfo is None:
         ct = ct.replace(tzinfo=UTC)
     return (now - ct).total_seconds()
+
+
+def _is_candle_closed(candle: Candle, now: datetime | None = None) -> bool:
+    """True if candle's close_time has been reached.
+
+    Binance close_time is the exclusive end of the interval. The candle
+    is closed once `now >= close_time` (age >= 0).
+    """
+    if now is None:
+        now = datetime.now(UTC)
+    ct = candle.close_time
+    if ct.tzinfo is None:
+        ct = ct.replace(tzinfo=UTC)
+    return now >= ct
+
+
+def _select_last_closed_candle(
+    candles: list[Candle], now: datetime | None = None
+) -> Candle | None:
+    """Return the most recent candle whose close_time has been reached.
+
+    Walks the list backwards. Returns None if no closed candle exists.
+    Skips in-progress (close_time > now) and future candles.
+
+    P0-02: enforces closed-candle evaluation.
+    """
+    if not candles:
+        return None
+    if now is None:
+        now = datetime.now(UTC)
+    # Candles should be in ascending open_time order. Walk from the end.
+    for c in reversed(candles):
+        ct = c.close_time
+        if ct.tzinfo is None:
+            ct = ct.replace(tzinfo=UTC)
+        if now >= ct:
+            return c
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -330,10 +376,18 @@ class StrategyScanner:
     pipeline stage so the exact failure point is always identifiable.
     """
 
-    def __init__(self, repo: TradingRepository, market_data: MarketDataProvider) -> None:
+    def __init__(
+        self,
+        repo: TradingRepository,
+        market_data: MarketDataProvider,
+        minimum_hits: int = 1,
+    ) -> None:
         self._repo = repo
         self._market_data = market_data
         self._lock = threading.RLock()
+        # Minimum number of conditions that must pass for a signal to be emitted.
+        # Loaded from paper_config.json — can be 1+ (any pass) or N (strict).
+        self._minimum_hits = max(1, int(minimum_hits))
         # Dedup set: (strategy_id, symbol, candle_close_time_epoch) — one signal per candle
         self._seen: set[tuple[str, str, int]] = set()
         self._max_seen = 5000
@@ -501,9 +555,32 @@ class StrategyScanner:
             self._diag.record_symbol_without_candles("insufficient_history")
             return None
 
-        # Freshness check: for 1m candles, must have a candle that closed in the last 5 min
-        latest_candle = candles[-1]
+        # P0-02: select the latest CLOSED candle. Binance close_time is EXCLUSIVE,
+        # so candles[-1] is often the in-progress candle whose age is negative.
+        # We must not evaluate a still-forming candle.
+        latest_candle = _select_last_closed_candle(candles)
+        if latest_candle is None:
+            logger.debug(
+                "[DATA] strategy=%s symbol=%s NO_CLOSED_CANDLE "
+                "all_candles_in_progress_or_future",
+                strat.name, symbol,
+            )
+            self._diag.record_symbol_without_candles("no_closed_candle")
+            return None
+
+        # P0-03: enforce non-negative age. If a closed candle somehow has
+        # negative age (clock skew, wrong data), skip it.
         age = _candle_age_seconds(latest_candle)
+        if age < 0:
+            logger.debug(
+                "[DATA] strategy=%s symbol=%s INVALID_AGE age=%.1fs "
+                "— skipping (clock skew or bad data)",
+                strat.name, symbol, age,
+            )
+            self._diag.record_symbol_without_candles("invalid_age")
+            return None
+
+        # Freshness check: the closed candle must be recent.
         is_fresh = age < 300  # 5 minutes
 
         self._diag.record_symbol_with_candles(is_fresh)
@@ -555,6 +632,15 @@ class StrategyScanner:
             logger.debug(
                 "[EVAL] strategy=%s symbol=%s CONDITIONS_FAILED reasons=%s",
                 strat.name, symbol, reasons,
+            )
+            return None
+
+        # P0-02: enforce minimum_hits threshold from paper config
+        if hits < self._minimum_hits:
+            logger.debug(
+                "[EVAL] strategy=%s symbol=%s MINIMUM_HITS_NOT_MET "
+                "hits=%d required=%d — signal suppressed",
+                strat.name, symbol, hits, self._minimum_hits,
             )
             return None
 
