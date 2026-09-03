@@ -3,6 +3,7 @@
 import logging
 import time
 from decimal import Decimal
+from typing import Any
 
 from app.database import TradingRepository
 from app.execution import OrderManager
@@ -21,6 +22,12 @@ class MultiSymbolRunner:
     """Run the multi-strategy scanner across all active strategies and universes.
 
     This replaces the single-symbol BotRunner for the new architecture.
+
+    When `execution_bridge` is provided, every scanner signal that the
+    scanner returns is routed through the bridge — which performs DB-level
+    dedup, risk check, OrderManager.process_signal, TP/SL attachment, and
+    persistence of order / position / trade. Without the bridge the
+    runner only persists signal rows (legacy mode used for tests).
     """
 
     def __init__(
@@ -28,6 +35,7 @@ class MultiSymbolRunner:
         scanner,
         interval_seconds: float = 60.0,
         alerts=None,
+        execution_bridge=None,
     ) -> None:
         if interval_seconds <= 0:
             raise ValueError("interval must be positive")
@@ -36,6 +44,7 @@ class MultiSymbolRunner:
         self._stop_requested = False
         self._paused = False
         self._alerts = alerts
+        self._execution_bridge = execution_bridge
 
     def stop(self) -> None:
         self._stop_requested = True
@@ -50,8 +59,39 @@ class MultiSymbolRunner:
     def is_paused(self) -> bool:
         return self._paused
 
+    @property
+    def execution_bridge(self):
+        return self._execution_bridge
+
+    def run_once(self) -> dict[str, Any]:
+        """Run one scanner cycle synchronously (no loop). Returns execution summary."""
+        signals = self._scanner.scan_once()
+        execution_summary: dict | None = None
+        if self._execution_bridge is not None and signals:
+            try:
+                decisions = self._execution_bridge.process_signals(signals)
+                execution_summary = {
+                    "submitted": len(decisions),
+                    "accepted": sum(1 for d in decisions if d.accepted),
+                    "rejected": sum(1 for d in decisions if not d.accepted),
+                    "decisions": decisions,
+                }
+            except Exception as exc:
+                logger.exception("execution bridge failed: %s", exc)
+        return {
+            "signals": signals,
+            "execution": execution_summary,
+        }
+
     def run(self, max_cycles: int | None = None) -> int:
-        """Run the scanner loop. Returns number of cycles completed."""
+        """Run the scanner loop. Returns number of cycles completed.
+
+        Each cycle:
+          1. scanner.scan_once() — fetches candles, evaluates conditions,
+             persists signal rows. Returns the same signals in memory.
+          2. execution_bridge.process_signals(...) — routes each signal
+             through risk → OrderManager → paper adapter → DB.
+        """
         completed = 0
         while not self._stop_requested and (max_cycles is None or completed < max_cycles):
             # Wait while paused
@@ -64,12 +104,32 @@ class MultiSymbolRunner:
             try:
                 signals = self._scanner.scan_once()
                 cycle_done = True
+                execution_summary = None
+                if self._execution_bridge is not None and signals:
+                    try:
+                        decisions = self._execution_bridge.process_signals(signals)
+                        accepted = sum(1 for d in decisions if d.accepted)
+                        rejected = sum(1 for d in decisions if not d.accepted)
+                        execution_summary = {
+                            "submitted": len(decisions),
+                            "accepted": accepted,
+                            "rejected": rejected,
+                        }
+                    except Exception as exc:
+                        logger.exception("execution bridge failed: %s", exc)
                 if self._alerts is not None:
                     self._alerts.record_cycle_success()
-                logger.info(
-                    "SCAN_COMPLETED cycles=%d signals=%d stats=%s",
-                    completed + 1, len(signals), self._scanner.stats,
-                )
+                if execution_summary is not None:
+                    logger.info(
+                        "SCAN_COMPLETED cycles=%d signals=%d execution=%s stats=%s",
+                        completed + 1, len(signals), execution_summary,
+                        self._scanner.stats,
+                    )
+                else:
+                    logger.info(
+                        "SCAN_COMPLETED cycles=%d signals=%d stats=%s",
+                        completed + 1, len(signals), self._scanner.stats,
+                    )
             except Exception as exc:
                 logger.exception("scan cycle failed: %s", exc)
                 if self._alerts is not None:

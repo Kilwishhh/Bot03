@@ -372,12 +372,65 @@ def admin_control_action(
                 publish_event("bot_start_failed", f"StrategyScanner init failed: {e}\n{_tb.format_exc()}")
                 raise HTTPException(status_code=500, detail=f"StrategyScanner init failed: {e}") from e
             interval = settings.poll_interval_seconds
+
+            # P0-EXEC: build the real execution pipeline so scanner signals
+            # reach OrderManager → PaperTradingAdapter → DB. This is the
+            # bridge that turns scanner signals into real paper trades.
+            from app.execution.scanner_bridge import ScannerExecutionBridge
+            from app.execution import OrderManager
+            from app.risk import PositionSizer, RiskManager
+            from decimal import Decimal as _D
+            _max_daily_loss = _D(str(settings.max_daily_loss))
+            _max_open_positions = int(_paper_cfg.get("max_open_positions", 3))
+            _min_confidence = _D(str(_paper_cfg.get("min_signal_confidence", 0.10)))
+            _max_leverage = int(_paper_cfg.get("max_leverage", settings.max_leverage or 10))
+            _max_exposure = _D(str(settings.max_exposure)) if settings.max_exposure else None
+            _max_drawdown = _D(str(_paper_cfg.get("max_drawdown_pct", "0.15")))
+            _risk_per_trade = _D(str(_paper_cfg.get("risk_per_trade", 0.01)))
+            _notional = _D(str(_paper_cfg.get("paper_position_notional", 10.0)))
+            _risk = RiskManager(
+                max_daily_loss=_max_daily_loss,
+                max_open_positions=_max_open_positions,
+                min_confidence=_min_confidence,
+                max_leverage=_max_leverage,
+                max_exposure=_max_exposure,
+                max_consecutive_losses=settings.max_consecutive_losses,
+                max_drawdown_pct=_max_drawdown,
+            )
+            _sizer = PositionSizer(_risk_per_trade)
+            _order_manager = OrderManager(exchange, _risk, _sizer)
+            # Resolve execution mode from settings — paper/testnet/live.
+            # Live is intentionally blocked at the bridge constructor.
+            _exec_mode = str(getattr(settings, "trading_mode", "paper")).lower()
+            if _exec_mode in ("backtest",):
+                _exec_mode = "paper"
+            _bridge = ScannerExecutionBridge(
+                repo=repository,
+                order_manager=_order_manager,
+                risk=_risk,
+                execution_mode=_exec_mode,
+                paper_position_notional=_notional,
+                leverage=_max_leverage,
+            )
             try:
-                runner = MultiSymbolRunner(scanner, interval_seconds=interval)
+                runner = MultiSymbolRunner(
+                    scanner,
+                    interval_seconds=interval,
+                    execution_bridge=_bridge,
+                )
             except Exception as e:
                 import traceback as _tb
                 publish_event("bot_start_failed", f"MultiSymbolRunner init failed: {e}\n{_tb.format_exc()}")
                 raise HTTPException(status_code=500, detail=f"MultiSymbolRunner init failed: {e}") from e
+
+            # P0-EXEC: start PositionWatcher so TP/SL orders can fire.
+            # The watcher polls Binance public ticker and calls update_market_price()
+            # on the paper adapter, which triggers the adapter's conditional order engine.
+            from app.execution.position_watcher import PositionWatcher
+            _watcher = PositionWatcher(paper_adapter=exchange, poll_interval=5.0)
+            _watcher.start()
+            # Store watcher on controller so /stop can shut it down cleanly
+            _controller["position_watcher"] = _watcher
 
             def _run():
                 _controller["runner"] = runner
@@ -416,6 +469,14 @@ def admin_control_action(
 
     if action == "stop":
         _controller["stop"] = True
+        # P0-EXEC: stop the position watcher so the runner thread isn't left alive
+        _watcher = _controller.get("position_watcher")
+        if _watcher is not None:
+            try:
+                _watcher.stop()
+            except Exception:
+                pass
+            _controller["position_watcher"] = None
         runner = _controller.get("runner")
         if runner is not None:
             runner.stop()
@@ -1512,4 +1573,16 @@ def admin_scanner_diagnostics(
         "total_signals_persisted_lifetime": diag_snapshot.get("total_signals_persisted", 0),
         "signals_in_db": sig_count,
         "recent_cycles": diag_snapshot.get("recent_cycles", []),
+        # P0-EXEC: execution bridge stats
+        "execution": getattr(runner, "_execution_bridge", None) is not None,
+        "bridge_stats": (
+            runner._execution_bridge.stats
+            if runner is not None and hasattr(runner, "_execution_bridge") and runner._execution_bridge is not None
+            else None
+        ),
+        "bridge_mode": (
+            runner._execution_bridge._mode
+            if runner is not None and hasattr(runner, "_execution_bridge") and runner._execution_bridge is not None
+            else None
+        ),
     }
