@@ -323,7 +323,7 @@ def compute_indicators(
     for item in config:
         if not item.get("enabled", True):
             continue
-        t = str(item.get("type", "")).upper()
+        t = str(item.get("type", item.get("name", ""))).upper()
         params = item.get("params", {}) or {}
         if t == "EMA":
             period = int(params.get("period", 21))

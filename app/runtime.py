@@ -3,6 +3,7 @@
 import logging
 import time
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 from app.database import TradingRepository
@@ -92,6 +93,9 @@ class MultiSymbolRunner:
           2. execution_bridge.process_signals(...) — routes each signal
              through risk → OrderManager → paper adapter → DB.
         """
+        _proj_root = Path(__file__).resolve().parent.parent
+        with open(_proj_root / "logs" / "bridge_debug.log", "a") as _f:
+            _f.write(f"RUNTIME.run() CALLED _execution_bridge={self._execution_bridge}\n")
         completed = 0
         while not self._stop_requested and (max_cycles is None or completed < max_cycles):
             # Wait while paused
@@ -102,7 +106,18 @@ class MultiSymbolRunner:
 
             cycle_done = False
             try:
-                signals = self._scanner.scan_once()
+                # DEBUG: confirm run() is being called
+                _proj_root = Path(__file__).resolve().parent.parent
+                with open(_proj_root / "logs" / "bridge_debug.log", "a") as _df:
+                    _df.write(f"RUNTIME.run() cycle_start\n")
+                try:
+                    signals = self._scanner.scan_once()
+                except Exception as _scan_exc:
+                    with open(_proj_root / "logs" / "bridge_debug.log", "a") as _ef:
+                        _ef.write(f"RUNTIME.scan_once() CRASHED: {_scan_exc}\n")
+                    raise
+                with open(_proj_root / "logs" / "bridge_debug.log", "a") as f:
+                    f.write(f"RUNTIME scan_once returned={len(signals) if signals else 0}\n")
                 cycle_done = True
                 execution_summary = None
                 if self._execution_bridge is not None and signals:

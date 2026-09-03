@@ -189,6 +189,15 @@ class ScannerExecutionBridge:
 
     def process_signals(self, signals: list[ScannerSignal]) -> list[ExecutionDecision]:
         """Process a batch of scanner signals. Returns one decision per signal."""
+        import logging as _l
+        _l.getLogger("app.execution.bridge").info(
+            "BRIDGE_PROCESS_SIGNALS received_count=%d", len(signals) if signals else 0
+        )
+        # Also write to a debug file we control
+        with open("logs/bridge_debug.log", "a") as f:
+            f.write(f"BRIDGE_PROCESS_SIGNALS received_count={len(signals) if signals else 0}\n")
+            if signals:
+                f.write(f"  first: symbol={signals[0].symbol} mode={signals[0].mode} side={signals[0].side}\n")
         decisions: list[ExecutionDecision] = []
         for sig in signals:
             try:

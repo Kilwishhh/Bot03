@@ -239,14 +239,15 @@ def evaluate_condition_groups_with_results(
             condition_results.append(ConditionResult(field=field, passed=passed, reason=reason))
         group_results.append(evaluate_group(grp, values, prev_values))
 
-    if logic == "any":
-        matched = any(ok for ok, _ in group_results)
-        reasons = [msg for ok, msg in group_results if ok]
-        return matched, reasons if reasons else ["no group matched"], condition_results
-    else:
-        matched = all(ok for ok, _ in group_results)
-        reasons = [msg for ok, msg in group_results if ok]
-        return matched, reasons if reasons else ["all conditions failed"], condition_results
+    # matched = condition-level: True when at least one group passes.
+    # This is the signal-generation gate — matches scanner's minimum_hits intent
+    # (at least one condition pass → signal). Group logic still determines
+    # direction/confidence reasons independently.
+    matched = any(ok for ok, _ in group_results)
+    reasons = [msg for ok, msg in group_results if ok]
+    if not reasons:
+        reasons = ["no condition passed"]
+    return matched, reasons, condition_results
 
 
 # ---------------------------------------------------------------------------
