@@ -114,6 +114,65 @@ def apply_migrations(conn: sqlite3.Connection, dry_run: bool = False) -> list[st
             applied.append(name)
             continue
 
+        if name == "016_repair_signal_schema" and not dry_run:
+            # Some deployed databases recorded 014/015 as applied while still
+            # having the legacy six-column signals table.
+            signal_columns = (
+                ("signal_id", "TEXT"),
+                ("user_id", "TEXT"),
+                ("strategy_id", "TEXT"),
+                ("strategy_name", "TEXT"),
+                ("entry", "TEXT"),
+                ("entry_price", "TEXT"),
+                ("take_profit", "TEXT"),
+                ("tp1", "TEXT"),
+                ("tp2", "TEXT"),
+                ("stop_loss", "TEXT"),
+                ("timeframe", "TEXT"),
+                ("mode", "TEXT NOT NULL DEFAULT 'paper'"),
+                ("signal_status", "TEXT NOT NULL DEFAULT 'active'"),
+                ("trading_status", "TEXT NOT NULL DEFAULT 'pending'"),
+                ("telegram_status", "TEXT NOT NULL DEFAULT 'pending'"),
+                ("square_status", "TEXT NOT NULL DEFAULT 'pending'"),
+                ("created_at", "TEXT"),
+                ("updated_at", "TEXT"),
+                ("candle_close_time", "TEXT"),
+                ("candle_close_epoch", "INTEGER"),
+                ("indicators", "TEXT"),
+                ("reasons", "TEXT"),
+                ("confidence_hits", "INTEGER"),
+                ("confidence_total", "INTEGER"),
+            )
+            with conn:
+                for column, definition in signal_columns:
+                    _exec_one(conn, f"ALTER TABLE signals ADD COLUMN {column} {definition}")
+                conn.execute(
+                    "UPDATE signals SET created_at = timestamp "
+                    "WHERE created_at IS NULL AND timestamp IS NOT NULL"
+                )
+                conn.execute(
+                    "UPDATE signals SET updated_at = created_at "
+                    "WHERE updated_at IS NULL AND created_at IS NOT NULL"
+                )
+                conn.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_signals_signal_id "
+                    "ON signals(signal_id) WHERE signal_id IS NOT NULL"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_signals_strategy_id "
+                    "ON signals(strategy_id, created_at DESC)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_signals_dedup "
+                    "ON signals(strategy_id, symbol, candle_close_epoch)"
+                )
+                conn.execute(
+                    "INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)",
+                    (name, _now_iso()),
+                )
+            applied.append(name)
+            continue
+
         if not dry_run:
             with conn:  # transaction context — commits on success
                 conn.executescript(sql)

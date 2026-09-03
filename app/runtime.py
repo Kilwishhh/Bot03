@@ -66,11 +66,16 @@ class MultiSymbolRunner:
 
     def run_once(self) -> dict[str, Any]:
         """Run one scanner cycle synchronously (no loop). Returns execution summary."""
-        signals = self._scanner.scan_once()
+        streamed_decisions = []
+        def on_signal(signal):
+            if self._execution_bridge is not None:
+                streamed_decisions.extend(self._execution_bridge.process_signals([signal]))
+
+        signals = self._scanner.scan_once(on_signal=on_signal)
         execution_summary: dict | None = None
         if self._execution_bridge is not None and signals:
             try:
-                decisions = self._execution_bridge.process_signals(signals)
+                decisions = streamed_decisions or self._execution_bridge.process_signals(signals)
                 execution_summary = {
                     "submitted": len(decisions),
                     "accepted": sum(1 for d in decisions if d.accepted),
@@ -111,7 +116,13 @@ class MultiSymbolRunner:
                 with open(_proj_root / "logs" / "bridge_debug.log", "a") as _df:
                     _df.write(f"RUNTIME.run() cycle_start\n")
                 try:
-                    signals = self._scanner.scan_once()
+                    streamed_decisions = []
+                    def on_signal(signal):
+                        if self._execution_bridge is not None:
+                            streamed_decisions.extend(
+                                self._execution_bridge.process_signals([signal])
+                            )
+                    signals = self._scanner.scan_once(on_signal=on_signal)
                 except Exception as _scan_exc:
                     with open(_proj_root / "logs" / "bridge_debug.log", "a") as _ef:
                         _ef.write(f"RUNTIME.scan_once() CRASHED: {_scan_exc}\n")
@@ -122,7 +133,7 @@ class MultiSymbolRunner:
                 execution_summary = None
                 if self._execution_bridge is not None and signals:
                     try:
-                        decisions = self._execution_bridge.process_signals(signals)
+                        decisions = streamed_decisions or self._execution_bridge.process_signals(signals)
                         accepted = sum(1 for d in decisions if d.accepted)
                         rejected = sum(1 for d in decisions if not d.accepted)
                         execution_summary = {

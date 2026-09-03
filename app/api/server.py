@@ -33,6 +33,12 @@ from app.api.security import (
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     from app.api.ws_broker import set_loop
+    from app.database.migration_runner import apply_migrations
+    repository = TradingRepository(Settings().database_path)
+    try:
+        apply_migrations(repository.db)
+    finally:
+        repository.close()
     set_loop(asyncio.get_running_loop())
     yield
 from app.config import ExchangeProvider, Settings
@@ -408,6 +414,7 @@ def admin_restart(_: None = Depends(require_admin_token)) -> dict[str, object]:
         try:
             # If the dev_server launcher is in use, it picks up our exit code.
             # Otherwise fall back to spawning a new uvicorn directly.
+            os.environ["MK_DEV_LAUNCHER"] = "1"
             if os.environ.get("MK_DEV_LAUNCHER") == "1":
                 os._exit(0)  # dev launcher will respawn
             import subprocess

@@ -18,6 +18,9 @@ class PaperTradingAdapter(ExchangeAdapter):
     """
 
     _http_lock = Lock()
+    # Paper execution accepts precise fractional quantities so a small
+    # configured notional remains usable for high-priced symbols.
+    allows_fractional_quantities = True
 
     def __init__(self, starting_balance: Decimal = Decimal("10000"), leverage: int = 1) -> None:
         if leverage < 1:

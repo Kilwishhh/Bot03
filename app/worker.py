@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from app.config import Settings
 from app.database import TradingRepository
+from app.database.migration_runner import apply_migrations
 from app.exchange import create_exchange
 from app.execution import OrderManager
 from app.market_data import AdapterMarketDataProvider
@@ -37,6 +38,7 @@ def build_runner(settings: Settings, repository: TradingRepository) -> BotRunner
 def main() -> None:
     settings = Settings()
     repository = TradingRepository(settings.database_path)
+    apply_migrations(repository.db)
     runner = None
     try:
         while True:

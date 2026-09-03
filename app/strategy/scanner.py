@@ -417,7 +417,7 @@ class StrategyScanner:
     def stats(self) -> dict:
         return dict(self._stats)
 
-    def scan_once(self) -> list[ScannerSignal]:
+    def scan_once(self, on_signal=None) -> list[ScannerSignal]:
         """Run one full scan cycle. Returns list of generated signals."""
         signals: list[ScannerSignal] = []
         strategies = load_active_strategies(self._repo)
@@ -438,7 +438,7 @@ class StrategyScanner:
                 universe_type=strat.universe_type,
             )
             try:
-                sigs = self._scan_strategy(strat)
+                sigs = self._scan_strategy(strat, on_signal=on_signal)
                 signals.extend(sigs)
             except Exception as exc:
                 logger.exception("strategy %s scan FAILED: %s", strat.name, exc)
@@ -495,7 +495,7 @@ class StrategyScanner:
         self._cycle_min_hits_samples.clear()
         return signals
 
-    def _scan_strategy(self, strat: StrategyRuntime) -> list[ScannerSignal]:
+    def _scan_strategy(self, strat: StrategyRuntime, on_signal=None) -> list[ScannerSignal]:
         """Scan a single strategy across its universe."""
         # Validate config before scanning
         cond_errors = validate_condition_config(strat.conditions_config)
@@ -538,6 +538,8 @@ class StrategyScanner:
                 sig = self._scan_symbol(strat, symbol)
                 if sig is not None:
                     signals.append(sig)
+                    if on_signal is not None:
+                        on_signal(sig)
             except Exception as exc:
                 logger.warning(
                     "[DATA] strategy=%s symbol=%s SCAN_FAILED: %s",
@@ -763,6 +765,8 @@ class StrategyScanner:
                     "entry": sig.entry,
                     "entry_price": str(sig.entry),  # back-compat with old schema
                     "take_profit": sig.take_profit,
+                    "tp1": sig.take_profit,
+                    "tp2": None,
                     "stop_loss": sig.stop_loss,
                     "confidence": sig.confidence,
                     "confidence_hits": sig.confidence_hits,
@@ -772,6 +776,7 @@ class StrategyScanner:
                     "reason": "; ".join(sig.reasons),  # back-compat column
                     "indicators": json.dumps(sig.indicators, default=str),
                     "candle_close_time": sig.candle_close_time,
+                    "candle_close_epoch": int(datetime.fromisoformat(sig.candle_close_time).timestamp()),
                     "status": "CREATED",
                     "signal_status": "active",
                     "trading_status": "pending",

@@ -38,6 +38,8 @@ class OrderManager:
             # Use a fixed notional dollar amount (e.g. $10) regardless of stop distance.
             raw_quantity = (position_notional * Decimal(str(leverage))) / ticker.price
             quantity = self._sizer._quantize(raw_quantity)
+            if quantity <= 0 and getattr(self._exchange, "allows_fractional_quantities", False):
+                quantity = raw_quantity
         else:
             stop = StopLossCalculator().percentage(ticker.price, signal.side.value, ticker.price * Decimal("0.02"))
             quantity = self._sizer.calculate(self._exchange.get_balance().available_balance, ticker.price, stop)

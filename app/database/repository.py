@@ -80,6 +80,7 @@ class TradingRepository:
             self._connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action, created_at DESC)")
             self._connection.execute("CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id)")
 
+
     def save_signal(self, signal: Signal) -> None:
         with self._lock:
             # Introspect the signals table columns — the test DB has the

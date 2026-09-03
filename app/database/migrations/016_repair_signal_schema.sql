@@ -1,0 +1,2 @@
+-- Migration 016 is handled programmatically by migration_runner.py.
+-- It repairs databases whose migration ledger predates the full signal schema.

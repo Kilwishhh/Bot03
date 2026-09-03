@@ -35,6 +35,7 @@ def main() -> None:
         if args.cycles < 0:
             parser.error("--cycles cannot be negative")
         from .database import TradingRepository
+        from .database.migration_runner import apply_migrations
         from .execution import OrderManager
         from .market_data import AdapterMarketDataProvider
         from .notifications import DeduplicatingPublisher, TelegramNotifier, TelegramSignalPublisher
@@ -45,11 +46,13 @@ def main() -> None:
         publisher = None
         if settings.enable_telegram and settings.telegram_bot_token and settings.telegram_chat_id:
             publisher = DeduplicatingPublisher(TelegramSignalPublisher(TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)))
+        repository = TradingRepository()
+        apply_migrations(repository.db)
         cycle = TradingCycle(
             AdapterMarketDataProvider(exchange),
             SignalEngine(create_strategy(settings)),
             OrderManager(exchange, RiskManager(Decimal(str(settings.max_daily_loss)), settings.max_open_positions, Decimal(str(settings.min_signal_confidence)), settings.max_leverage, Decimal(str(settings.max_exposure)), settings.max_consecutive_losses), PositionSizer(Decimal(str(settings.risk_per_trade)))),
-            TradingRepository(),
+            repository,
             publisher,
         )
         runner = BotRunner(cycle, settings.default_symbol, settings.timeframe, args.interval or settings.poll_interval_seconds)

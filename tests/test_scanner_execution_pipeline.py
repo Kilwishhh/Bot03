@@ -467,6 +467,30 @@ class TestPositionWatcher:
 # ---------------------------------------------------------------------------
 
 class TestRuntimeBridgeWiring:
+    def test_runner_streams_signals_to_bridge(self):
+        """Signals are handed off as soon as the scanner emits them."""
+        from app.runtime import MultiSymbolRunner
+
+        signal = MagicMock()
+        first_decision = MagicMock(accepted=True)
+        bridge = MagicMock()
+        bridge.process_signals.return_value = [first_decision]
+
+        class StreamingScanner:
+            stats = {}
+
+            def scan_once(self, on_signal=None):
+                if on_signal is not None:
+                    on_signal(signal)
+                return [signal]
+
+        result = MultiSymbolRunner(
+            StreamingScanner(), interval_seconds=60, execution_bridge=bridge
+        ).run_once()
+
+        bridge.process_signals.assert_called_once_with([signal])
+        assert result["execution"]["accepted"] == 1
+
     def test_multi_symbol_runner_run_once_calls_bridge(self, bridge_db):
         """MultiSymbolRunner.run_once() returns bridge decisions for the cycle."""
         from app.runtime import MultiSymbolRunner

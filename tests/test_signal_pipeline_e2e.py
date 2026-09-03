@@ -264,6 +264,37 @@ def test_signal_persisted_to_db():
     assert rows[0][5] == "paper"
     assert rows[0][4] == "1m"
 
+    columns = {row[1] for row in repo.db.execute("PRAGMA table_info(signals)")}
+    assert {"signal_id", "strategy_id", "entry_price", "tp1", "created_at"}.issubset(columns)
+    full_row = repo.db.execute(
+        "SELECT signal_id, strategy_id, entry_price, tp1, created_at "
+        "FROM signals WHERE symbol = 'BTCUSDT'"
+    ).fetchone()
+    assert full_row[0]
+    assert full_row[1]
+    assert float(full_row[2]) == 100.5
+    assert float(full_row[3]) > 100.5
+    assert full_row[4]
+
+
+def test_signal_callback_receives_persisted_signals_during_scan():
+    """The runner can execute each signal before the full universe scan ends."""
+    from app.strategy.scanner import StrategyScanner
+
+    db_path = _build_temp_db()
+    repo = _seed_db(db_path)
+    _insert_strategy(
+        repo, universe_config={"symbols": ["BTCUSDT", "ETHUSDT"]}
+    )
+    md = _StubMarketData(["BTCUSDT", "ETHUSDT"])
+    received = []
+    scanner = StrategyScanner(repo, md)
+
+    signals = scanner.scan_once(on_signal=received.append)
+
+    assert received == signals
+    assert len(received) == 2
+
 
 def test_signal_visible_through_signal_service():
     """The persisted signal must be retrievable through SignalService.list()."""

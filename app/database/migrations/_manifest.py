@@ -10,4 +10,5 @@ MIGRATIONS: list[str] = [
     "013_relax_timeframe_check",
     "014_extend_signals_full",
     "015_condition_confidence",
+    "016_repair_signal_schema",
 ]
