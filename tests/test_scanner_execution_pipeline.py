@@ -431,6 +431,19 @@ class TestPositionWatcher:
         assert position.mark_price == D("101")
         assert position.unrealized_pnl == D("2")
 
+    def test_new_position_tracks_open_time(self):
+        from app.exchange.models import OrderRequest, OrderSide, OrderType
+        from app.exchange.paper import PaperTradingAdapter
+        from decimal import Decimal as D
+
+        paper = PaperTradingAdapter(starting_balance=D("10000"), leverage=2)
+        paper.update_market_price("BTCUSDT", D("100"))
+        paper.place_order(OrderRequest(
+            symbol="BTCUSDT", side=OrderSide.BUY, order_type=OrderType.MARKET,
+            quantity=D("1"),
+        ))
+        assert paper.get_position("BTCUSDT").opened_at is not None
+
     def test_watcher_reports_open_mark_updates_for_short_positions(self, monkeypatch):
         from app.execution.position_watcher import PositionWatcher
         from app.exchange.models import OrderSide, Position

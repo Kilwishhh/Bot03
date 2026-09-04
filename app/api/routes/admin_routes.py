@@ -554,7 +554,7 @@ def admin_positions(
     ctx.require_admin()
     from app.database.repository import TradingRepository
     repo = TradingRepository()
-    sql = ("SELECT symbol, side, quantity, entry_price, mark_price, leverage, unrealized_pnl, updated_at "
+    sql = ("SELECT symbol, side, quantity, entry_price, mark_price, leverage, unrealized_pnl, opened_at, updated_at "
            "FROM positions ORDER BY updated_at DESC LIMIT ?")
     cur = repo.db.execute(sql, (limit,))
     cols = [d[0] for d in cur.description]

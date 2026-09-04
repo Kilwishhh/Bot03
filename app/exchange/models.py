@@ -54,6 +54,7 @@ class Position:
     leverage: int
     unrealized_pnl: Decimal = Decimal("0")
     strategy_id: str | None = None
+    opened_at: datetime | None = None
 
 
 @dataclass(frozen=True)

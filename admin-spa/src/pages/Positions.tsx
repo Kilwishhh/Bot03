@@ -23,6 +23,16 @@ export default function Positions() {
       {n != null ? n.toFixed(4) : '—'}
     </span>
   }
+  const age = (v: any) => {
+    if (!v) return '—'
+    const seconds = Math.max(0, Math.floor((Date.now() - new Date(v).getTime()) / 1000))
+    if (seconds < 60) return `${seconds}s`
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ${minutes % 60}m`
+    return `${Math.floor(hours / 24)}d ${hours % 24}h`
+  }
 
   return (
     <div>
@@ -34,7 +44,7 @@ export default function Positions() {
       {loading ? <p className="muted">Loading...</p> : (
         <table>
           <thead>
-            <tr><th>Symbol</th><th>Side</th><th>Quantity</th><th>Entry</th><th>Mark</th><th>Unrealized PnL</th><th>Leverage</th><th>Updated</th></tr>
+            <tr><th>Symbol</th><th>Side</th><th>Quantity</th><th>Entry</th><th>Mark</th><th>Unrealized PnL</th><th>Leverage</th><th>Open for</th></tr>
           </thead>
           <tbody>
             {positions.map((p, i) => (
@@ -46,7 +56,7 @@ export default function Positions() {
                 <td>{p.mark_price || '—'}</td>
                 <td>{fmtPnl(p.unrealized_pnl)}</td>
                 <td>{p.leverage ? `${p.leverage}x` : '—'}</td>
-                <td className="muted">{p.updated_at ? new Date(p.updated_at).toLocaleString() : '—'}</td>
+                <td className="muted" title={p.opened_at ? new Date(p.opened_at).toLocaleString() : ''}>{age(p.opened_at)}</td>
               </tr>
             ))}
             {positions.length === 0 && <tr><td colSpan={8} className="empty">No open positions</td></tr>}

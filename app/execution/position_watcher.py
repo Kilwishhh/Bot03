@@ -129,7 +129,7 @@ class PositionWatcher:
         """Fetch the live Binance public ticker price for symbol."""
         try:
             import urllib.request
-            url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
+            url = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}"
             with urllib.request.urlopen(url, timeout=5) as resp:
                 data = json.loads(resp.read())
             return Decimal(data["price"])

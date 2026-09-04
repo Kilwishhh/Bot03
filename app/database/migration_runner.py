@@ -189,6 +189,26 @@ def apply_migrations(conn: sqlite3.Connection, dry_run: bool = False) -> list[st
             applied.append(name)
             continue
 
+        if name == "017_positions_opened_at" and not dry_run:
+            with conn:
+                _exec_one(conn, "ALTER TABLE positions ADD COLUMN opened_at TEXT")
+                if _has_column(conn, "positions", "updated_at"):
+                    conn.execute(
+                        "UPDATE positions SET opened_at = COALESCE(updated_at, datetime('now')) "
+                        "WHERE opened_at IS NULL"
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE positions SET opened_at = datetime('now') "
+                        "WHERE opened_at IS NULL"
+                    )
+                conn.execute(
+                    "INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)",
+                    (name, _now_iso()),
+                )
+            applied.append(name)
+            continue
+
         if not dry_run:
             with conn:  # transaction context — commits on success
                 conn.executescript(sql)

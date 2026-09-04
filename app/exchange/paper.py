@@ -77,7 +77,7 @@ class PaperTradingAdapter(ExchangeAdapter):
             # public ticker is unavailable, raise so callers can decide
             # to wait / log / skip — never silently substitute a constant.
             import json, urllib.request
-            url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
+            url = f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={symbol}"
             try:
                 with self._http_lock:
                     with urllib.request.urlopen(url, timeout=5) as resp:
@@ -156,7 +156,7 @@ class PaperTradingAdapter(ExchangeAdapter):
         else:
             self._positions[request.symbol] = Position(
                 request.symbol, request.side, request.quantity, fill_price, fill_price,
-                self._leverage,
+                self._leverage, opened_at=datetime.now(UTC),
             )
 
         result = OrderResult(order_id, request.symbol, "FILLED", request.quantity, fill_price)
@@ -182,6 +182,7 @@ class PaperTradingAdapter(ExchangeAdapter):
                 leverage=position.leverage,
                 unrealized_pnl=pnl,
                 strategy_id=position.strategy_id,
+                opened_at=position.opened_at,
             )
 
         for order in list(self._orders.values()):

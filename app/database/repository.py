@@ -32,7 +32,7 @@ class TradingRepository:
             self._connection.execute("CREATE TABLE IF NOT EXISTS bot_events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT, message TEXT, created_at TEXT)")
             self._connection.execute("CREATE TABLE IF NOT EXISTS errors (error_id INTEGER PRIMARY KEY AUTOINCREMENT, error_type TEXT, message TEXT, created_at TEXT)")
             self._connection.execute("CREATE TABLE IF NOT EXISTS balances (asset TEXT PRIMARY KEY, wallet_balance TEXT, available_balance TEXT, updated_at TEXT)")
-            self._connection.execute("CREATE TABLE IF NOT EXISTS positions (symbol TEXT PRIMARY KEY, side TEXT, quantity TEXT, entry_price TEXT, mark_price TEXT, leverage INTEGER, unrealized_pnl TEXT, strategy_id TEXT, updated_at TEXT)")
+            self._connection.execute("CREATE TABLE IF NOT EXISTS positions (symbol TEXT PRIMARY KEY, side TEXT, quantity TEXT, entry_price TEXT, mark_price TEXT, leverage INTEGER, unrealized_pnl TEXT, strategy_id TEXT, opened_at TEXT, updated_at TEXT)")
             self._connection.execute("CREATE TABLE IF NOT EXISTS control_state (id INTEGER PRIMARY KEY CHECK (id = 1), desired_state TEXT NOT NULL, heartbeat_at TEXT, updated_at TEXT NOT NULL)")
 
             # ── ermis multi-user tables ────────────────────────────────────
@@ -150,8 +150,10 @@ class TradingRepository:
             return
         with self._lock:
             self._connection.execute(
-                "INSERT OR REPLACE INTO positions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (position.symbol, position.side.value, str(position.quantity), str(position.entry_price), str(position.mark_price), position.leverage, str(position.unrealized_pnl), position.strategy_id, datetime.now(UTC).isoformat()),
+                "INSERT OR REPLACE INTO positions "
+                "(symbol, side, quantity, entry_price, mark_price, leverage, unrealized_pnl, strategy_id, opened_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (position.symbol, position.side.value, str(position.quantity), str(position.entry_price), str(position.mark_price), position.leverage, str(position.unrealized_pnl), position.strategy_id, position.opened_at.isoformat() if position.opened_at else None, datetime.now(UTC).isoformat()),
             )
 
     def recent_orders(self, limit: int = 20) -> list[tuple]:

@@ -6,9 +6,11 @@ MIGRATIONS: list[str] = [
     "001_init",
     "002_extend_signals",
     "003_backfill",
+    "011_positions_strategy_id",
     "012_extend_strategies",
     "013_relax_timeframe_check",
     "014_extend_signals_full",
     "015_condition_confidence",
     "016_repair_signal_schema",
+    "017_positions_opened_at",
 ]
