@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
+import { absoluteTime, relativeTime, useCurrentTime } from '../utils/time'
 
 export default function Trades() {
   const [trades, setTrades] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [limit, setLimit] = useState(50)
   const [symbol, setSymbol] = useState('')
+  const now = useCurrentTime()
 
   const load = async () => {
     setLoading(true)
@@ -20,7 +22,6 @@ export default function Trades() {
 
   const filtered = trades.filter(t => !symbol || t.symbol?.includes(symbol)).slice(0, limit)
 
-  const fmt = (v: any) => v ? new Date(v).toLocaleString() : '—'
   const fmtPnl = (v: any) => {
     const n = parseFloat(v)
     return <span style={{color: n >= 0 ? 'var(--green)' : 'var(--red)'}}>
@@ -54,8 +55,8 @@ export default function Trades() {
                 <td>{fmtPnl(t.realized_pnl)}</td>
                 <td>{t.fees ?? '—'}</td>
                 <td className="muted">{t.strategy || '—'}</td>
-                <td className="muted">{fmt(t.entry_time)}</td>
-                <td className="muted">{fmt(t.exit_time)}</td>
+                <td className="muted" title={absoluteTime(t.entry_time)}>{relativeTime(t.entry_time, now)}</td>
+                <td className="muted" title={absoluteTime(t.exit_time)}>{relativeTime(t.exit_time, now)}</td>
               </tr>
             ))}
             {filtered.length === 0 && <tr><td colSpan={10} className="empty">No trades</td></tr>}

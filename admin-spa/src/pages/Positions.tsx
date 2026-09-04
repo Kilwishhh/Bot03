@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
+import { absoluteTime, relativeTime, useCurrentTime } from '../utils/time'
 
 export default function Positions() {
   const [positions, setPositions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const now = useCurrentTime()
 
   const load = async () => {
     setLoading(true)
@@ -22,16 +24,6 @@ export default function Positions() {
     return <span style={{color: n >= 0 ? 'var(--green)' : 'var(--red)', fontWeight:600}}>
       {n != null ? n.toFixed(4) : '—'}
     </span>
-  }
-  const age = (v: any) => {
-    if (!v) return '—'
-    const seconds = Math.max(0, Math.floor((Date.now() - new Date(v).getTime()) / 1000))
-    if (seconds < 60) return `${seconds}s`
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes}m`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ${minutes % 60}m`
-    return `${Math.floor(hours / 24)}d ${hours % 24}h`
   }
 
   return (
@@ -56,7 +48,7 @@ export default function Positions() {
                 <td>{p.mark_price || '—'}</td>
                 <td>{fmtPnl(p.unrealized_pnl)}</td>
                 <td>{p.leverage ? `${p.leverage}x` : '—'}</td>
-                <td className="muted" title={p.opened_at ? new Date(p.opened_at).toLocaleString() : ''}>{age(p.opened_at)}</td>
+                <td className="muted" title={absoluteTime(p.opened_at)}>{relativeTime(p.opened_at, now)}</td>
               </tr>
             ))}
             {positions.length === 0 && <tr><td colSpan={8} className="empty">No open positions</td></tr>}

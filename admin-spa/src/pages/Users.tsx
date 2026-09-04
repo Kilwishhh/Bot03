@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
+import { absoluteTime, relativeTime, useCurrentTime } from '../utils/time'
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'green', inactive: 'gray', pending: 'yellow', banned: 'red'
@@ -9,6 +10,7 @@ const ROLE_COLORS: Record<string, string> = {
 }
 
 export default function Users() {
+  const now = useCurrentTime()
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [action, setAction] = useState('')
@@ -73,7 +75,7 @@ export default function Users() {
                   <td>{u.email}</td>
                   <td><span className={`badge ${ROLE_COLORS[u.role] || 'gray'}`}>{u.role}</span></td>
                   <td><span className={`badge ${STATUS_COLORS[u.status] || 'gray'}`}>{u.status}</span></td>
-                  <td className="muted">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
+                  <td className="muted" title={absoluteTime(u.created_at)}>{relativeTime(u.created_at, now)}</td>
                   <td>
                     {u.status !== 'active' && (
                       <button className="success" style={{marginRight:6}} onClick={() => act(u.id, 'activate')}

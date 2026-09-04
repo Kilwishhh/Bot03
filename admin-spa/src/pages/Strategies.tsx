@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { api } from '../api'
+import { absoluteTime, relativeTime, useCurrentTime } from '../utils/time'
 
 type LifecycleState =
   | 'draft' | 'backtest' | 'paper' | 'testnet'
@@ -120,8 +121,6 @@ export function isValidTimeframe(value: number, unit: TfUnit): boolean {
 }
 const OPS = ['>', '<', '>=', '<=', '==', 'CROSSES_ABOVE', 'CROSSES_BELOW']
 const TIMEFRAMES: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d']
-
-function fmtTime(v: string) { return v ? new Date(v).toLocaleString() : '—' }
 
 function exportTemplate(s: any): string {
   // Export a strategy as a pasteable template (YAML-ish key:value lines)
@@ -275,6 +274,7 @@ function strategyToForm(s: any): StrategyForm {
 }
 
 export default function Strategies() {
+  const now = useCurrentTime()
   const [strats, setStrats] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -457,8 +457,8 @@ export default function Strategies() {
 
               <div className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
                 ID: {selected.id}<br />
-                Created: {fmtTime(selected.created_at)}<br />
-                Updated: {fmtTime(selected.updated_at)}
+                <span title={absoluteTime(selected.created_at)}>Created: {relativeTime(selected.created_at, now)}</span><br />
+                <span title={absoluteTime(selected.updated_at)}>Updated: {relativeTime(selected.updated_at, now)}</span>
               </div>
 
               {selected.description && <p>{selected.description}</p>}
