@@ -24,9 +24,11 @@ interface StrategyForm {
     top_n?: number
     symbols?: string[]
   }
-  indicators_config: Array<{ name: string; params: Record<string, number> }>
+  indicators_config: Array<{ name: string; params: Record<string, number>; enabled?: boolean; long_enabled?: boolean; short_enabled?: boolean }>
   conditions_config: {
     logic: 'all' | 'any'
+    voting_mode?: boolean
+    trading_direction?: 'both' | 'long' | 'short'
     groups: Array<{
       logic: 'all' | 'any'
       conditions: Array<{ field: string; op: string; value?: number; ref?: string }>
@@ -59,11 +61,17 @@ const EMPTY: StrategyForm = {
   universe_type: 'all_binance_futures',
   universe_config: { top_n: 20 },
   indicators_config: [
-    { name: 'RSI', params: { period: 14 } },
-    { name: 'EMA', params: { period: 21 } },
+    { name: 'RSI', params: { period: 14, oversold: 30, overbought: 70 }, enabled: true, long_enabled: true, short_enabled: true },
+    { name: 'MACD', params: { fast_period: 12, slow_period: 26, signal_period: 9 }, enabled: true, long_enabled: true, short_enabled: true },
+    { name: 'EMA_CROSSOVER', params: { fast_period: 20, slow_period: 50 }, enabled: true, long_enabled: true, short_enabled: true },
+    { name: 'VOLUME', params: { period: 20 }, enabled: true, long_enabled: true, short_enabled: true },
+    { name: 'BOLLINGER', params: { period: 20, std_multiplier: 2 }, enabled: true, long_enabled: true, short_enabled: true },
+    { name: 'STOCHASTIC', params: { k_period: 14, d_period: 3, smooth: 3, oversold: 20, overbought: 80 }, enabled: true, long_enabled: true, short_enabled: true },
   ],
   conditions_config: {
     logic: 'all',
+    voting_mode: true,
+    trading_direction: 'both',
     groups: [{
       logic: 'all',
       conditions: [
@@ -74,18 +82,27 @@ const EMPTY: StrategyForm = {
   },
   exit_config: { take_profit_pct: 1.5, stop_loss_pct: 0.8, trailing_stop: false, trailing_pct: 0 },
   risk_config: { max_per_trade: 0.02, max_daily_loss: 0.05, max_open_positions: 3, max_leverage: 10, max_exposure: 0.5 },
-  confidence_config: { minimum_hits: 1 },
+  confidence_config: { minimum_hits: 4 },
   notes: '',
 }
 
-const INDICATOR_TYPES = ['RSI', 'EMA', 'SMA', 'MACD', 'BOLLINGER', 'VOLUME']
+const INDICATOR_TYPES = ['RSI', 'MACD', 'EMA_CROSSOVER', 'VOLUME', 'BOLLINGER', 'STOCHASTIC']
 const INDICATOR_DEFAULTS: Record<string, Record<string, number>> = {
   RSI: { period: 14 },
-  EMA: { period: 21 },
-  SMA: { period: 50 },
   MACD: { fast_period: 12, slow_period: 26, signal_period: 9 },
+  EMA_CROSSOVER: { fast_period: 20, slow_period: 50 },
+  VOLUME: { period: 20 },
   BOLLINGER: { period: 20, std_multiplier: 2 },
-  VOLUME: {},
+  STOCHASTIC: { k_period: 14, d_period: 3, smooth: 3, oversold: 20, overbought: 80 },
+}
+
+const INDICATOR_HELP: Record<string, string> = {
+  RSI: 'RSI measures momentum. Below oversold can support LONG; above overbought can support SHORT; otherwise it is neutral.',
+  MACD: 'MACD compares fast and slow momentum. Line above signal supports LONG; below supports SHORT.',
+  EMA_CROSSOVER: 'EMA Crossover compares two trend averages. Fast above slow supports LONG; below supports SHORT.',
+  VOLUME: 'Volume checks whether activity is stronger than its recent average and confirms the current candle direction.',
+  BOLLINGER: 'Bollinger Bands show a normal price range. Near the lower band can support LONG; near the upper band can support SHORT.',
+  STOCHASTIC: 'Stochastic compares the close with its recent range. Oversold upward turns support LONG; overbought downward turns support SHORT.',
 }
 
 // ── Timeframe helpers ────────────────────────────────────────────────────────
@@ -273,7 +290,7 @@ function strategyToForm(s: any): StrategyForm {
     universe_type: s.universe_type ?? 'all_binance_futures',
     universe_config: s.universe_config ?? { top_n: 20 },
     indicators_config: s.indicators_config ?? s.entry_config?.indicators ?? EMPTY.indicators_config,
-    conditions_config: s.conditions_config ?? (s.entry_config?.conditions ? { logic: 'all', groups: [{ logic: 'all', conditions: s.entry_config.conditions }] } : EMPTY.conditions_config),
+    conditions_config: s.conditions_config ? { ...EMPTY.conditions_config, ...s.conditions_config } : (s.entry_config?.conditions ? { ...EMPTY.conditions_config, logic: 'all', groups: [{ logic: 'all', conditions: s.entry_config.conditions }] } : EMPTY.conditions_config),
     exit_config: s.exit_config ?? EMPTY.exit_config,
     risk_config: s.risk_config ?? EMPTY.risk_config,
     confidence_config: s.confidence_config ?? EMPTY.confidence_config,
@@ -656,15 +673,17 @@ function StrategyBuilder(props: {
   const setField = <K extends keyof StrategyForm>(k: K, v: StrategyForm[K]) =>
     setForm({ ...f, [k]: v })
 
-  const setIndicator = (idx: number, patch: Partial<{ name: string; params: Record<string, number> }>) => {
+  const setIndicator = (idx: number, patch: Partial<{ name: string; params: Record<string, number>; enabled: boolean; long_enabled: boolean; short_enabled: boolean }>) => {
     const arr = [...f.indicators_config]
     arr[idx] = { ...arr[idx], ...patch }
     setField('indicators_config', arr)
   }
   const addIndicator = () =>
-    setField('indicators_config', [...f.indicators_config, { name: 'RSI', params: { period: 14 } }])
-  const removeIndicator = (idx: number) =>
+    setField('indicators_config', [...f.indicators_config, { name: 'RSI', params: INDICATOR_DEFAULTS.RSI, enabled: true, long_enabled: true, short_enabled: true }])
+  const removeIndicator = (idx: number) => {
+    if (f.indicators_config.length <= 1) return
     setField('indicators_config', f.indicators_config.filter((_, i) => i !== idx))
+  }
   const indicatorFields = f.indicators_config.flatMap(ind => {
     const period = ind.params.period
     if (ind.name === 'MACD') return ['MACD_LINE', 'MACD_SIGNAL', 'MACD_HIST']
@@ -674,7 +693,14 @@ function StrategyBuilder(props: {
   })
   const availableFields = ['PRICE', ...indicatorFields]
 
-  const conditionTotal = f.conditions_config.groups.reduce((sum, group) => sum + group.conditions.length, 0)
+  const enabledIndicators = f.indicators_config.filter(ind => ind.enabled !== false)
+  const indicatorTotal = enabledIndicators.length
+  const minimumHits = Math.min(Math.max(1, f.confidence_config.minimum_hits || 1), Math.max(1, indicatorTotal))
+  useEffect(() => {
+    if (indicatorTotal > 0 && f.confidence_config.minimum_hits > indicatorTotal) {
+      setField('confidence_config', { minimum_hits: indicatorTotal })
+    }
+  }, [indicatorTotal])
   const setGroup = (gi: number, patch: any) => {
     const groups = [...f.conditions_config.groups]
     groups[gi] = { ...groups[gi], ...patch }
@@ -832,14 +858,20 @@ function StrategyBuilder(props: {
 
         {/* Indicators */}
         <fieldset>
-          <legend>2. Indicators — what should the strategy measure?</legend>
-          <p className="muted" style={{fontSize:12}}>Add as many indicators as you need. Their values become available in the Entry rules section.</p>
+          <legend>2. Indicators — choose what must agree</legend>
+          <p className="muted" style={{fontSize:12}}>Each enabled indicator gives one LONG, SHORT, or NEUTRAL vote. Choose which directions it may support.</p>
           {f.indicators_config.map((ind, idx) => (
-            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: 8, marginBottom: 8, alignItems: 'center', border:'1px solid #333', borderRadius:6, padding:8 }}>
+            <div key={idx} style={{ border:'1px solid #333', borderRadius:6, padding:10, marginBottom:8 }}>
+              <div style={{display:'flex', gap:8, alignItems:'center'}}>
+              <input type="checkbox" checked={ind.enabled !== false} onChange={e => setIndicator(idx, { enabled: e.target.checked })} />
               <select value={ind.name} onChange={e => setIndicator(idx, { name: e.target.value, params: INDICATOR_DEFAULTS[e.target.value] })}>
                 {INDICATOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
-              <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+              <button type="button" onClick={() => alert(INDICATOR_HELP[ind.name] || 'This indicator provides a market vote.')}>? Help</button>
+              <button className="danger" onClick={() => removeIndicator(idx)} style={{marginLeft:'auto'}}>Remove</button>
+              </div>
+              <p className="muted" style={{fontSize:12, margin:'6px 0'}}>{INDICATOR_HELP[ind.name]}</p>
+              <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'center'}}>
                 {Object.entries(ind.params).map(([pk, pv]) => (
                 <label key={pk} style={{display:'flex', alignItems:'center', gap:4, fontSize:12}}>
                   <span className="muted">{pk}</span>
@@ -850,57 +882,31 @@ function StrategyBuilder(props: {
                 </label>
               ))}
               </div>
-              <button className="danger" onClick={() => removeIndicator(idx)}>×</button>
+              <div style={{display:'flex', gap:12, marginTop:8, fontSize:12}}>
+                <label><input type="checkbox" checked={ind.long_enabled !== false} onChange={e => setIndicator(idx, { long_enabled: e.target.checked })} /> LONG ✓</label>
+                <label><input type="checkbox" checked={ind.short_enabled !== false} onChange={e => setIndicator(idx, { short_enabled: e.target.checked })} /> SHORT ✓</label>
+              </div>
             </div>
           ))}
           <button onClick={addIndicator}>+ Add Indicator</button>
         </fieldset>
 
-        {/* Conditions */}
+        {/* Direction and quality */}
         <fieldset>
-          <legend>3. Entry rules — when should it open a trade?</legend>
-          <p className="muted" style={{fontSize:12}}>A condition compares a live indicator with a number or another indicator. Use groups to create advanced AND/OR logic.</p>
-          <div style={{ marginBottom: 8 }}>
-            <label>Top-level logic: </label>
-            <select value={f.conditions_config.logic} onChange={e => setField('conditions_config', { ...f.conditions_config, logic: e.target.value as any })}>
-              <option value="all">ALL groups must pass (AND)</option>
-              <option value="any">ANY group may pass (OR)</option>
-            </select>
+          <legend>3. Trading direction & signal quality</legend>
+          <label>Trading Direction</label>
+          <select value={f.conditions_config.trading_direction || 'both'} onChange={e => setField('conditions_config', { ...f.conditions_config, trading_direction: e.target.value as 'both' | 'long' | 'short', voting_mode: true })}>
+            <option value="both">LONG + SHORT</option>
+            <option value="long">LONG ONLY</option>
+            <option value="short">SHORT ONLY</option>
+          </select>
+          <p className="muted" style={{fontSize:12}}>How many indicators must agree before the bot creates a signal?</p>
+          <div style={{display:'flex', gap:8, alignItems:'center'}}>
+            <button type="button" onClick={() => setField('confidence_config', { minimum_hits: Math.max(1, minimumHits - 1) })}>−</button>
+            <strong>{minimumHits} of {indicatorTotal}</strong>
+            <button type="button" onClick={() => setField('confidence_config', { minimum_hits: Math.min(Math.max(1, indicatorTotal), minimumHits + 1) })}>+</button>
           </div>
-          {f.conditions_config.groups.map((g, gi) => (
-            <div key={gi} style={{ border: '1px solid #333', padding: 8, marginBottom: 8, borderRadius: 4 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <strong>Group {gi + 1}</strong>
-                <span className="muted">logic:</span>
-                <select value={g.logic} onChange={e => setGroup(gi, { logic: e.target.value as any })}>
-                  <option value="all">ALL (AND)</option>
-                  <option value="any">ANY (OR)</option>
-                </select>
-                <button className="danger" onClick={() => removeGroup(gi)} style={{ marginLeft: 'auto' }}>Remove group</button>
-              </div>
-              {g.conditions.map((c, ci) => (
-                <div key={ci} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
-                  <select value={c.field} onChange={e => setCondition(gi, ci, { field: e.target.value })}>
-                    {availableFields.map(field => <option key={field} value={field}>{field}</option>)}
-                  </select>
-                  <select value={c.op} onChange={e => setCondition(gi, ci, { op: e.target.value })}>
-                    {OPS.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                  <input
-                    placeholder="number or ref:EMA_21" value={c.ref ? `ref:${c.ref}` : (c.value ?? '')}
-                    onChange={e => {
-                      const v = e.target.value
-                      if (v.startsWith('ref:')) setCondition(gi, ci, { ref: v.slice(4), value: undefined })
-                      else setCondition(gi, ci, { value: parseFloat(v), ref: undefined })
-                    }} style={{ width: 110 }}
-                  />
-                  <button className="danger" onClick={() => removeCondition(gi, ci)}>×</button>
-                </div>
-              ))}
-              <button onClick={() => addCondition(gi)}>+ Add Condition</button>
-            </div>
-          ))}
-          <button onClick={addGroup}>+ Add Group</button>
+          <p className="muted" style={{fontSize:12}}>Example: 4 of 6 means at least four enabled indicators must agree on the direction.</p>
         </fieldset>
 
         {/* Exit / TP / SL */}
@@ -964,27 +970,20 @@ function StrategyBuilder(props: {
           </div>
         </fieldset>
 
-        {/* Confidence */}
+        {/* Live preview */}
         <fieldset>
-          <legend>Signal quality — how many rules must agree?</legend>
+          <legend>Live preview — how your strategy behaves</legend>
           <p className="muted" style={{fontSize:12}}>
-            The scanner evaluates every entry rule and reports quality as hits/total. A trade is enabled only when the minimum is reached.
+            This preview explains the voting model. Live signals use the same enabled indicators and minimum.
           </p>
-          <label>Minimum rules that must pass</label>
-          <div style={{display:'flex', gap:8, alignItems:'center'}}>
-            <input
-              type="number" min={1} max={Math.max(1, conditionTotal)}
-              value={Math.min(Math.max(1, f.confidence_config.minimum_hits || 1), Math.max(1, conditionTotal))}
-              onChange={e => setField('confidence_config', {
-                minimum_hits: Math.min(Math.max(1, parseInt(e.target.value) || 1), Math.max(1, conditionTotal)),
-              })}
-              style={{width:80}}
-            />
-            <strong>of {conditionTotal || 0} rules</strong>
+          {enabledIndicators.map(ind => <div key={ind.name} style={{display:'flex', justifyContent:'space-between', fontSize:12, padding:'3px 0'}}>
+            <span>{ind.name.replace('_', ' ')}</span><span className="muted">LONG / SHORT / NEUTRAL</span>
+          </div>)}
+          <div style={{display:'flex', gap:18, marginTop:8}}>
+            <strong>LONG: —/{indicatorTotal}</strong><strong>SHORT: —/{indicatorTotal}</strong>
           </div>
-          <p className="muted" style={{fontSize:12, marginBottom:0}}>
-            Example: with 10 rules and minimum 5, only signals scoring at least 5/10 can create a trade.
-          </p>
+          <p style={{marginBottom:6}}>Minimum Required: <strong>{minimumHits}/{indicatorTotal}</strong></p>
+          <button type="button" onClick={() => alert('The bot checks each enabled indicator when a candle closes. Each returns LONG, SHORT, or NEUTRAL. It counts agreement for the selected direction. A signal is created only when that direction reaches the minimum required votes.')}>How does this work?</button>
         </fieldset>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>

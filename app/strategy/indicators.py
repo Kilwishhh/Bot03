@@ -364,3 +364,76 @@ def compute_indicators(
     elif "PRICE" not in result:
         result["PRICE"] = None
     return result
+
+
+def compute_indicator_votes(candles: list["Candle"], config: list[dict]) -> list[dict]:
+    """Return beginner-friendly LONG/SHORT/NEUTRAL votes for enabled indicators."""
+    closes = _prices(candles)
+    if not closes:
+        return []
+    current = closes[-1]
+    previous = closes[-2] if len(closes) > 1 else current
+    votes: list[dict] = []
+    for item in config:
+        if not item.get("enabled", True):
+            continue
+        name = str(item.get("name", item.get("type", ""))).upper()
+        params = item.get("params", {}) or {}
+        vote = "NEUTRAL"
+        detail = ""
+        if name == "RSI":
+            value = rsi(candles, int(params.get("period", 14)))
+            oversold = float(params.get("oversold", 30))
+            overbought = float(params.get("overbought", 70))
+            if value is not None:
+                vote = "LONG" if value <= oversold else "SHORT" if value >= overbought else vote
+                detail = f"RSI {value:.1f}"
+        elif name == "MACD":
+            result = macd(candles, int(params.get("fast_period", 12)), int(params.get("slow_period", 26)), int(params.get("signal_period", 9)))
+            if result and result[0] is not None and result[1] is not None:
+                vote = "LONG" if result[0] > result[1] else "SHORT" if result[0] < result[1] else vote
+                detail = "MACD line vs signal"
+        elif name in ("EMA_CROSSOVER", "EMA CROSSOVER"):
+            fast = ema_custom(candles, int(params.get("fast_period", 20)))
+            slow = ema_custom(candles, int(params.get("slow_period", 50)))
+            if fast is not None and slow is not None:
+                vote = "LONG" if fast > slow else "SHORT" if fast < slow else vote
+                detail = "fast EMA vs slow EMA"
+        elif name == "VOLUME":
+            period = int(params.get("period", 20))
+            volumes = [float(c.volume) for c in candles]
+            if len(volumes) >= period + 1:
+                average = sum(volumes[-period - 1:-1]) / period
+                if volumes[-1] > average:
+                    vote = "LONG" if current > previous else "SHORT" if current < previous else vote
+                    detail = "volume confirms candle direction"
+        elif name in ("BOLLINGER", "BBANDS"):
+            result = bollinger_bands(candles, int(params.get("period", 20)), float(params.get("std_multiplier", 2)))
+            if result and result[0] is not None and result[2] is not None:
+                vote = "LONG" if current <= result[2] else "SHORT" if current >= result[0] else vote
+                detail = "price vs bands"
+        elif name in ("STOCH", "STOCHASTIC"):
+            period = int(params.get("k_period", params.get("period", 14)))
+            d_period = int(params.get("d_period", 3))
+            if len(candles) >= period + d_period:
+                k_values = []
+                for end in range(period, len(candles) + 1):
+                    window = candles[end - period:end]
+                    high = max(float(c.high) for c in window)
+                    low = min(float(c.low) for c in window)
+                    close = float(window[-1].close)
+                    k_values.append(50.0 if high == low else (close - low) / (high - low) * 100)
+                k = k_values[-1]
+                d = sum(k_values[-d_period:]) / d_period
+                oversold = float(params.get("oversold", 20))
+                overbought = float(params.get("overbought", 80))
+                vote = "LONG" if k <= oversold and k > d else "SHORT" if k >= overbought and k < d else vote
+                detail = f"%K {k:.1f} / %D {d:.1f}"
+        votes.append({
+            "name": name,
+            "vote": vote,
+            "long_enabled": bool(item.get("long_enabled", True)),
+            "short_enabled": bool(item.get("short_enabled", True)),
+            "detail": detail,
+        })
+    return votes

@@ -31,7 +31,7 @@ from app.strategy.condition_engine import (
     evaluate_condition_groups_with_results,
     validate_condition_config,
 )
-from app.strategy.indicators import compute_indicators, get_timeframe_minutes, price as price_indicator
+from app.strategy.indicators import compute_indicator_votes, compute_indicators, get_timeframe_minutes, price as price_indicator
 from app.strategy.universe import get_symbols_for_universe
 
 logger = logging.getLogger(__name__)
@@ -367,6 +367,23 @@ def _determine_side(reasons: list[str], conditions_config: dict) -> str:
     return "SELL"
 
 
+def _voting_result(candles: list[Candle], strat: StrategyRuntime) -> tuple[bool, str, int, int, list[str]]:
+    """Evaluate indicator cards as independent directional votes."""
+    votes = compute_indicator_votes(candles, strat.indicators_config)
+    direction = str(strat.conditions_config.get("trading_direction", "both")).lower()
+    long_votes = [v for v in votes if v["vote"] == "LONG" and v["long_enabled"] and direction != "short"]
+    short_votes = [v for v in votes if v["vote"] == "SHORT" and v["short_enabled"] and direction != "long"]
+    if long_votes and len(long_votes) >= len(short_votes):
+        side, hits = "BUY", len(long_votes)
+    elif short_votes:
+        side, hits = "SELL", len(short_votes)
+    else:
+        side, hits = "BUY", 0
+    reasons = [f'{v["name"]}: {v["vote"]}' for v in votes]
+    total = len(votes)
+    return hits > 0, side, hits, total, reasons
+
+
 # ---------------------------------------------------------------------------
 # Scanner with diagnostics
 # ---------------------------------------------------------------------------
@@ -655,13 +672,17 @@ class StrategyScanner:
 
         self._diag.record_indicator()
 
-        # Evaluate entry conditions
-        matched, reasons, cond_results = evaluate_condition_groups_with_results(
-            strat.conditions_config, values, prev_values
-        )
-
-        total_conds = _count_conditions(strat.conditions_config)
-        hits = sum(1 for c in cond_results if c.passed)
+        voting_mode = bool(strat.conditions_config.get("voting_mode"))
+        if voting_mode:
+            matched, vote_side, hits, total_conds, reasons = _voting_result(candles, strat)
+            cond_results = []
+            values["indicator_votes"] = reasons
+        else:
+            matched, reasons, cond_results = evaluate_condition_groups_with_results(
+                strat.conditions_config, values, prev_values
+            )
+            total_conds = _count_conditions(strat.conditions_config)
+            hits = sum(1 for c in cond_results if c.passed)
         self._diag.record_conditions(hits, max(1, total_conds))
 
         minimum_hits = _minimum_hits_for_strategy(strat.confidence_config, total_conds)
@@ -677,11 +698,12 @@ class StrategyScanner:
             return None
 
         # P0-02: enforce minimum_hits threshold from paper config
-        if hits < max(self._minimum_hits, minimum_hits):
+        effective_minimum_hits = minimum_hits if voting_mode else max(self._minimum_hits, minimum_hits)
+        if hits < effective_minimum_hits:
             # P0-04: aggregate per-cycle; suppress per-symbol DEBUG spam.
             self._cycle_min_hits_count += 1
             if len(self._cycle_min_hits_samples) < self._cycle_fail_sample_max:
-                self._cycle_min_hits_samples.append((strat.name, symbol, hits, max(self._minimum_hits, minimum_hits)))
+                self._cycle_min_hits_samples.append((strat.name, symbol, hits, effective_minimum_hits))
             return None
 
         # Get entry price
@@ -710,7 +732,7 @@ class StrategyScanner:
                 drop_n = self._max_seen // 2
                 self._seen = set(list(self._seen)[drop_n:])
 
-        side = _determine_side(reasons, strat.conditions_config)
+        side = vote_side if voting_mode else _determine_side(reasons, strat.conditions_config)
         tp, sl = _compute_tp_sl(entry, side, strat.exit_config)
         confidence = _compute_confidence(
             hits, total_conds, strat.confidence_config

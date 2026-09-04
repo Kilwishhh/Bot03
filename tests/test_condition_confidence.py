@@ -1,6 +1,8 @@
 """P0-01: Condition confidence (N/M hits/total) — regression tests."""
 
 import pytest
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from app.strategy.condition_engine import (
     ConditionResult,
     evaluate_condition,
@@ -8,6 +10,8 @@ from app.strategy.condition_engine import (
     evaluate_condition_groups_with_results,
 )
 from app.strategy.scanner import _compute_confidence, _minimum_hits_for_strategy
+from app.strategy.indicators import compute_indicator_votes
+from app.exchange.models import Candle
 
 
 class TestEvaluateConditionGroupsWithResults:
@@ -149,3 +153,21 @@ class TestIntegerConfidenceGate:
     def test_quality_is_hits_over_total_without_percentage_semantics(self):
         assert _compute_confidence(5, 10, {"minimum_hits": 5}) == 0.5
         assert _compute_confidence(7, 7, {"minimum_hits": 5}) == 1.0
+
+    def test_core_indicator_voting_config_is_directional(self):
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        candles = [
+            Candle(start + timedelta(minutes=i), Decimal(str(100 + i)), Decimal(str(101 + i)),
+                   Decimal(str(99 + i)), Decimal(str(100 + i)), Decimal("100"), start + timedelta(minutes=i + 1))
+            for i in range(70)
+        ]
+        votes = compute_indicator_votes(candles, [
+            {"name": "MACD", "params": {"fast_period": 12, "slow_period": 26, "signal_period": 9}},
+            {"name": "EMA_CROSSOVER", "params": {"fast_period": 20, "slow_period": 50}},
+            {"name": "VOLUME", "params": {"period": 20}},
+            {"name": "STOCHASTIC", "params": {"k_period": 14, "d_period": 3, "smooth": 3}},
+        ])
+        assert len(votes) == 4
+        assert votes[0]["vote"] in {"LONG", "SHORT", "NEUTRAL"}
+        assert votes[1]["vote"] == "LONG"
+        assert all("long_enabled" in vote and "short_enabled" in vote for vote in votes)

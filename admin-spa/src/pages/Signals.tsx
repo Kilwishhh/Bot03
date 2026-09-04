@@ -56,6 +56,13 @@ export default function Signals() {
     }
     return '—'
   }
+  const indicatorResults = (s: any) => {
+    const raw = String(s.reasons || s.reason || '')
+    return raw.split(';').map(x => x.trim()).filter(Boolean).map(item => {
+      const match = item.match(/^(.+?):\s*(LONG|SHORT|NEUTRAL)$/i)
+      return match ? { name: match[1], vote: match[2].toUpperCase() } : null
+    }).filter(Boolean) as Array<{name:string; vote:string}>
+  }
 
   return (
     <div>
@@ -120,8 +127,10 @@ export default function Signals() {
           <p title={absoluteTime(selected.candle_close_time)}>Candle close: {relativeTime(selected.candle_close_time, now)}</p>
           <h3>Publish Status</h3>
           <p>Telegram: {selected.telegram_status || '—'}</p>
-          <h3>Conditions / Indicators</h3>
-          <pre>{selected.reasons || selected.reason || '—'}</pre>
+          <h3>Why this signal was created</h3>
+          {indicatorResults(selected).length > 0
+            ? indicatorResults(selected).map(result => <p key={result.name} style={{margin:'4px 0'}}>{result.name} {result.vote === (selected.side === 'SELL' ? 'SHORT' : 'LONG') ? '✓' : result.vote === 'NEUTRAL' ? '—' : '✕'} <span className="muted">{result.vote}</span></p>)
+            : <pre>{selected.reasons || selected.reason || '—'}</pre>}
           <pre>{selected.indicators || '—'}</pre>
           <h3>Telegram Post</h3>
           <pre>{selected.telegram_preview || '—'}</pre>
