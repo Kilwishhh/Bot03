@@ -384,7 +384,22 @@ def test_reset_rejects_unknown_mode():
     repo._connection = _sq.connect(tmp.name)
     repo._lock = type("L", (), {"__enter__": lambda s: s, "__exit__": lambda *a: False})()
     with pytest.raises(ValueError):
-        reset_mode_data(repo, "live")
+        reset_mode_data(repo, "invalid")
+
+
+def test_all_reset_removes_runtime_data_but_preserves_accounts(populated_db):
+    from app.api.routes.admin_routes import reset_mode_data
+    from app.database import TradingRepository
+    repo = TradingRepository.__new__(TradingRepository)
+    repo._connection = sqlite3.connect(populated_db)
+    repo._lock = type("L", (), {"__enter__": lambda s: s, "__exit__": lambda *a: False})()
+
+    counts = reset_mode_data(repo, "all")
+
+    assert counts["signals_deleted"] == 5
+    assert counts["trades_deleted"] == 2
+    assert _counts(populated_db)["users"] == 1
+    assert _counts(populated_db)["strategies"] == 2
 
 
 # ────────────────────────────── helpers ──────────────────────────────────────

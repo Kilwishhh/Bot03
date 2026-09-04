@@ -671,7 +671,7 @@ def admin_logs(
 
 
 def reset_mode_data(repo, mode: str) -> dict[str, int | str]:
-    """Delete runtime records for `mode` (paper | testnet) from the given repo.
+    """Delete runtime records for one mode or all modes from the repository.
 
     Strategies, users, and other modes are never touched.
     Returns a counts dict with keys *_deleted or *_error.
@@ -701,9 +701,12 @@ def reset_mode_data(repo, mode: str) -> dict[str, int | str]:
     except Exception:
         pass
 
-    if mode == "paper":
+    if mode == "paper" or mode == "all":
         if has_mode:
-            counts["signals_deleted"] = _safe_delete("signals", "mode = ?", ("paper",))
+            counts["signals_deleted"] = (
+                _safe_delete("signals") if mode == "all"
+                else _safe_delete("signals", "mode = ?", ("paper",))
+            )
         else:
             counts["signals_deleted"] = _safe_delete("signals")
         counts["trades_deleted"] = _safe_delete("trades")
@@ -713,9 +716,9 @@ def reset_mode_data(repo, mode: str) -> dict[str, int | str]:
         counts["bot_events_deleted"] = _safe_delete("bot_events")
         counts["errors_deleted"] = _safe_delete("errors")
         counts["daily_pnl_deleted"] = _safe_delete("daily_pnl")
-    elif mode == "testnet":
+    elif mode in ("testnet", "live"):
         if has_mode:
-            counts["signals_deleted"] = _safe_delete("signals", "mode = ?", ("testnet",))
+            counts["signals_deleted"] = _safe_delete("signals", "mode = ?", (mode,))
         else:
             counts["signals_deleted"] = 0
         # Legacy: trades/positions/orders have no mode column locally;
@@ -745,7 +748,7 @@ def admin_reset(
     NEVER touches strategies, users, configuration, or data of other modes.
     """
     ctx.require_admin()
-    if mode not in ("paper", "testnet"):
+    if mode not in ("paper", "testnet", "live", "all"):
         raise HTTPException(status_code=400, detail=f"unknown mode: {mode}")
     if not confirm:
         raise HTTPException(status_code=400, detail="confirm=true required")

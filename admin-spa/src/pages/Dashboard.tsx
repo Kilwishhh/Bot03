@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [refreshLoading, setRefreshLoading] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
   const [resetConfirm, setResetConfirm] = useState(false)
+  const [resetMode, setResetMode] = useState<'paper' | 'testnet' | 'live' | 'all'>('paper')
   const [resetMsg, setResetMsg] = useState<{ok?: string; err?: string} | null>(null)
 
   // Derive effective state from backend
@@ -66,13 +67,13 @@ export default function Dashboard() {
     try { await load() } finally { setRefreshLoading(false) }
   }
 
-  const handleResetPaper = async () => {
+  const handleResetData = async () => {
     if (!resetConfirm) { setResetConfirm(true); return }
     setResetLoading(true)
     setResetMsg(null)
     try {
-      const r = await api<any>('/admin/reset/paper', { method: 'POST', query: { confirm: true } })
-      setResetMsg({ ok: `Cleared: signals=${r.counts?.signals_deleted ?? 0} trades=${r.counts?.trades_deleted ?? 0}` })
+      const r = await api<any>(`/admin/reset/${resetMode}`, { method: 'POST', query: { confirm: true } })
+      setResetMsg({ ok: `Cleared ${resetMode}: ${r.counts?.signals_deleted ?? 0} signals, ${r.counts?.trades_deleted ?? 0} trades, ${r.counts?.positions_deleted ?? 0} positions` })
       setResetConfirm(false)
       await load()
     } catch (e: any) {
@@ -142,28 +143,35 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* ── Reset paper data ── */}
+      {/* ── Reset runtime data ── */}
       <div style={{ border: '1px solid #444', borderRadius: 6, padding: 12, marginBottom: 20 }}>
-        <div style={{ fontWeight: 600, marginBottom: 8, color: '#ccc' }}>Reset Paper Data</div>
+        <div style={{ fontWeight: 600, marginBottom: 8, color: '#ccc' }}>Reset Trading Data</div>
         {!resetConfirm ? (
-          <button
-            className="danger"
-            disabled={resetLoading || ctrlAction !== '' || state !== 'stopped'}
-            onClick={() => setResetConfirm(true)}
-          >
-            RESET PAPER DATA
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select value={resetMode} onChange={e => setResetMode(e.target.value as typeof resetMode)}
+              disabled={resetLoading || ctrlAction !== '' || state !== 'stopped'}>
+              <option value="paper">Paper data</option>
+              <option value="testnet">Testnet data</option>
+              <option value="live">Live data</option>
+              <option value="all">All trading data</option>
+            </select>
+            <button className="danger" disabled={resetLoading || ctrlAction !== '' || state !== 'stopped'}
+              onClick={() => setResetConfirm(true)}>
+              RESET SELECTED DATA
+            </button>
+          </div>
         ) : (
           <div>
             <p style={{ color: '#fca', fontSize: 13, marginBottom: 8 }}>
-              This will permanently remove all Paper-mode test data including paper trades,
-              positions, signals, and related runtime records. Testnet and Live data will not be affected.
+              This will permanently delete <strong>{resetMode === 'all' ? 'all trading' : resetMode}</strong> signals,
+              trades, positions, orders, and runtime records. Strategies, users, and configuration are preserved.
+              {resetMode === 'all' && ' This cannot be undone.'}
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 className="danger"
                 disabled={resetLoading}
-                onClick={handleResetPaper}
+                onClick={handleResetData}
               >
                 {resetLoading ? 'Resetting…' : 'CONFIRM RESET'}
               </button>
