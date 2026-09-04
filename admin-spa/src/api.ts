@@ -2,12 +2,23 @@
 // so no API base field is needed and CORS is impossible.
 
 const TOKEN_KEY = 'mk_admin_token'
+const AUTH_TYPE_KEY = 'mk_admin_auth_type'
 
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) || ''
 }
-export function setToken(t: string) { localStorage.setItem(TOKEN_KEY, t) }
-export function clearToken() { localStorage.removeItem(TOKEN_KEY) }
+export function setToken(t: string) {
+  localStorage.setItem(TOKEN_KEY, t)
+  localStorage.setItem(AUTH_TYPE_KEY, 'admin-token')
+}
+export function setSessionToken(t: string) {
+  localStorage.setItem(TOKEN_KEY, t)
+  localStorage.setItem(AUTH_TYPE_KEY, 'session')
+}
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(AUTH_TYPE_KEY)
+}
 
 export class ApiError extends Error {
   status: number
@@ -30,7 +41,10 @@ export async function api<T = any>(
   }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const tok = getToken()
-  if (tok) headers['X-Admin-Token'] = tok
+  if (tok) {
+    if (localStorage.getItem(AUTH_TYPE_KEY) === 'session') headers['Authorization'] = `Bearer ${tok}`
+    else headers['X-Admin-Token'] = tok
+  }
   const res = await fetch(url.toString(), {
     method: opts.method || 'GET',
     headers,

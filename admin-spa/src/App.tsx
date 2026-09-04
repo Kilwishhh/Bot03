@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { getToken, setToken, clearToken, api } from './api'
+import { getToken, setToken, setSessionToken, clearToken, api } from './api'
 import Dashboard from './pages/Dashboard'
 import Logs from './pages/Logs'
 import Users from './pages/Users'
@@ -12,19 +12,33 @@ import PaperConfig from './pages/PaperConfig'
 import Risk from './pages/Risk'
 import Settings from './pages/Settings'
 
-function Login() {
+function Login({ onAuthenticated }: { onAuthenticated: () => void }) {
   const [tok, setTokInput] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [tokenMode, setTokenMode] = useState(false)
   const [err, setErr] = useState('')
   const navigate = useNavigate()
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErr('')
-    setToken(tok)
     try {
-      await api('/admin/users', { query: { limit: 1 } })
+      if (tokenMode) {
+        setToken(tok)
+        await api('/admin/users', { query: { limit: 1 } })
+      } else {
+        const result = await api<{ token: string; user: { role: string } }>('/auth/login', {
+          method: 'POST',
+          body: { email, password },
+        })
+        if (result.user.role !== 'admin') throw new Error('admin role required')
+        setSessionToken(result.token)
+        await api('/admin/users', { query: { limit: 1 } })
+      }
+      onAuthenticated()
       navigate('/dashboard')
     } catch (e: any) {
-      setErr(e.detail || 'invalid token')
+      setErr(e.detail || e.message || (tokenMode ? 'invalid token' : 'invalid email or password'))
       clearToken()
     }
   }
@@ -32,10 +46,20 @@ function Login() {
     <div className="login">
       <form onSubmit={submit}>
         <h2>MK Trader Admin</h2>
-        <label>Admin token</label>
-        <input type="password" value={tok} onChange={e => setTokInput(e.target.value)} placeholder="X-Admin-Token" autoFocus />
+        {tokenMode ? <>
+          <label>Admin token</label>
+          <input type="password" value={tok} onChange={e => setTokInput(e.target.value)} placeholder="X-Admin-Token" autoFocus />
+        </> : <>
+          <label>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" autoFocus />
+          <label>Password</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" />
+        </>}
         {err && <div className="error">{err}</div>}
         <button type="submit">Sign in</button>
+        <button type="button" onClick={() => { setTokenMode(!tokenMode); setErr('') }}>
+          {tokenMode ? 'Sign in with account' : 'Use admin token'}
+        </button>
       </form>
     </div>
   )
@@ -117,7 +141,7 @@ export default function App() {
   if (authed && loc.pathname === '/login') return <Navigate to="/dashboard" />
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<Login onAuthenticated={() => setAuthed(true)} />} />
       <Route path="/*" element={<Shell />} />
     </Routes>
   )
