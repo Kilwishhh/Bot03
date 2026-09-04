@@ -318,6 +318,8 @@ def admin_control_action(
     from app.api.control import _controller
     from app.database.repository import get_default_repository
     from app.api.ws_broker import publish_event
+    from datetime import UTC, datetime
+    import uuid
     repo = get_default_repository()
 
     if action == "start":
@@ -427,7 +429,27 @@ def admin_control_action(
             # The watcher polls Binance public ticker and calls update_market_price()
             # on the paper adapter, which triggers the adapter's conditional order engine.
             from app.execution.position_watcher import PositionWatcher
-            _watcher = PositionWatcher(paper_adapter=exchange, poll_interval=5.0)
+            def _record_closed_trade(position, pnl):
+                now = datetime.now(UTC).isoformat()
+                repository.save_trade({
+                    "trade_id": str(uuid.uuid4()),
+                    "symbol": position.symbol,
+                    "side": position.side.value,
+                    "quantity": str(position.quantity),
+                    "entry_price": str(position.entry_price),
+                    "exit_price": str(position.mark_price or position.entry_price),
+                    "realized_pnl": str(pnl),
+                    "fees": "0",
+                    "strategy": "multi_symbol_scanner",
+                    "entry_time": now,
+                    "exit_time": now,
+                })
+
+            _watcher = PositionWatcher(
+                paper_adapter=exchange,
+                poll_interval=5.0,
+                on_position_closed=_record_closed_trade,
+            )
             _watcher.start()
             # Store watcher on controller so /stop can shut it down cleanly
             _controller["position_watcher"] = _watcher

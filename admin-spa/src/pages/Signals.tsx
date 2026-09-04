@@ -24,7 +24,7 @@ export default function Signals() {
   const load = async () => {
     setLoading(true)
     try {
-      const data = await api('/signals', { query: { limit: 100 } })
+      const data = await api('/admin/signals', { query: { limit: 100 } })
       setSignals(Array.isArray(data) ? data : [])
     } catch { setSignals([]) }
     setLoading(false)
@@ -86,14 +86,14 @@ export default function Signals() {
           </thead>
           <tbody>
             {filtered.map(s => (
-              <tr key={s.id}>
+             <tr key={s.signal_id || s.id || `${s.symbol}-${s.created_at || s.timestamp}`}>
                 <td><span className="badge blue">{s.symbol || '—'}</span></td>
                 <td>{s.side ? SIDE_BADGE(s.side) : '—'}</td>
                 <td>{fmtPrice(s.entry_price)}</td>
                 <td>{fmtPrice(s.tp1 || s.tp)}</td>
                 <td>{fmtPrice(s.stop_loss)}</td>
-                <td>{STATUS_BADGE(s.signal_status || s.status)}</td>
-                <td>{STATUS_BADGE(s.trading_status)}</td>
+                <td>{STATUS_BADGE(String(s.signal_status || s.status || '').toLowerCase())}</td>
+                <td>{STATUS_BADGE(String(s.trading_status || '').toLowerCase())}</td>
                 <td className="mono">{fmtConfidence(s)}</td>
                 <td className="muted">{fmt(s.created_at)}</td>
               </tr>
