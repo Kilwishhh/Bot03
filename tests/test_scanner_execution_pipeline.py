@@ -415,6 +415,44 @@ def _replace(sig, **kwargs):
 # ---------------------------------------------------------------------------
 
 class TestPositionWatcher:
+    def test_market_updates_persist_unrealized_pnl_inputs(self):
+        from app.exchange.paper import PaperTradingAdapter
+        from app.exchange.models import OrderSide, Position
+        from decimal import Decimal as D
+
+        paper = PaperTradingAdapter(starting_balance=D("10000"), leverage=2)
+        paper._positions["BTCUSDT"] = Position(
+            symbol="BTCUSDT", side=OrderSide.BUY, quantity=D("1"),
+            entry_price=D("100"), mark_price=D("100"), leverage=2,
+            unrealized_pnl=D("0"),
+        )
+        paper.update_market_price("BTCUSDT", D("101"))
+        position = paper.get_position("BTCUSDT")
+        assert position.mark_price == D("101")
+        assert position.unrealized_pnl == D("2")
+
+    def test_watcher_reports_open_mark_updates_for_short_positions(self, monkeypatch):
+        from app.execution.position_watcher import PositionWatcher
+        from app.exchange.models import OrderSide, Position
+        from app.exchange.paper import PaperTradingAdapter
+        from decimal import Decimal as D
+
+        paper = PaperTradingAdapter(starting_balance=D("10000"), leverage=2)
+        paper._positions["BTCUSDT"] = Position(
+            symbol="BTCUSDT", side=OrderSide.SELL, quantity=D("1"),
+            entry_price=D("100"), mark_price=D("100"), leverage=2,
+            unrealized_pnl=D("0"),
+        )
+        updates = []
+        monkeypatch.setattr(PositionWatcher, "_fetch_ticker", lambda self, symbol: D("99"))
+        watcher = PositionWatcher(
+            paper, on_position_updated=updates.append,
+        )
+        watcher._tick()
+        assert len(updates) == 1
+        assert updates[0].mark_price == D("99")
+        assert updates[0].unrealized_pnl == D("2")
+
     def test_watcher_callback_preserves_actual_exit_price_and_pnl(self, monkeypatch):
         from app.execution.position_watcher import PositionWatcher
         from app.exchange.models import Position, OrderSide

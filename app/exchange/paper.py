@@ -168,6 +168,21 @@ class PaperTradingAdapter(ExchangeAdapter):
         if price <= 0:
             raise ValueError("market price must be positive")
         self._prices[symbol] = price
+        position = self._positions.get(symbol)
+        if position is not None:
+            pnl = (price - position.entry_price) * position.quantity * Decimal(position.leverage)
+            if position.side.value == "SELL":
+                pnl = -pnl
+            self._positions[symbol] = Position(
+                symbol=position.symbol,
+                side=position.side,
+                quantity=position.quantity,
+                entry_price=position.entry_price,
+                mark_price=price,
+                leverage=position.leverage,
+                unrealized_pnl=pnl,
+                strategy_id=position.strategy_id,
+            )
 
         for order in list(self._orders.values()):
             current = self._orders.get(order.order_id)

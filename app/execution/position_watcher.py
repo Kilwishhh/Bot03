@@ -39,7 +39,8 @@ class PositionWatcher:
         paper_adapter:  The shared PaperTradingAdapter (same instance used by
                         OrderManager so positions/orders are visible).
         poll_interval:  Seconds between ticker polls. Default 5s.
-        on_position_closed:  Optional callback(position, pnl) when a position closes.
+        on_position_closed:  Optional callback(position, pnl, exit_price) when a position closes.
+        on_position_updated: Optional callback(position) after an open position is marked.
     """
 
     def __init__(
@@ -47,10 +48,12 @@ class PositionWatcher:
         paper_adapter: "PaperTradingAdapter",
         poll_interval: float = 5.0,
         on_position_closed=None,
+        on_position_updated=None,
     ) -> None:
         self._adapter = paper_adapter
         self._interval = max(0.5, float(poll_interval))
         self._on_closed = on_position_closed
+        self._on_updated = on_position_updated
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -117,6 +120,8 @@ class PositionWatcher:
                         price,
                         pnl,
                     )
+                elif self._on_updated is not None and pos_after is not None:
+                    self._on_updated(pos_after)
             except Exception as exc:
                 logger.debug("position_watcher price update for %s failed: %s", symbol, exc)
 

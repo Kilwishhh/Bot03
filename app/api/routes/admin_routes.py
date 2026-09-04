@@ -445,10 +445,14 @@ def admin_control_action(
                     "exit_time": exit_time,
                 })
 
+            def _persist_position_update(position):
+                repository.save_position(position)
+
             _watcher = PositionWatcher(
                 paper_adapter=exchange,
                 poll_interval=5.0,
                 on_position_closed=_record_closed_trade,
+                on_position_updated=_persist_position_update,
             )
             _watcher.start()
             # Store watcher on controller so /stop can shut it down cleanly
