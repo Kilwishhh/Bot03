@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from decimal import Decimal
 
 from app.core.errors import ForbiddenError, NotFoundError
 from app.core.rbac import AccessContext
@@ -1491,12 +1492,158 @@ def admin_list_positions(
     except Exception:
         return []
     out = []
+    try:
+        exchange = _position_exchange()
+    except HTTPException:
+        exchange = None
     for r in rows:
         d = {}
         for c, v in zip(cols, r):
             d[c] = v
+        if exchange is not None:
+            orders = exchange.get_open_orders(d.get("symbol"))
+            d["brackets"] = [
+                {"order_id": o.order_id, "type": o.raw.get("type"), "trigger_price": o.raw.get("stopPrice"), "quantity": str(o.executed_quantity)}
+                for o in orders
+            ]
+            d["tp_status"] = f"{sum(1 for o in orders if o.raw.get('type') == 'TAKE_PROFIT_MARKET')} TP active"
+            d["sl_status"] = "SL active" if any(o.raw.get("type") == "STOP_MARKET" for o in orders) else "No SL"
         out.append(d)
     return out
+
+
+def _position_exchange():
+    """Return the exchange instance used by the running execution bridge."""
+    from app.api.control import _controller
+    runner = _controller.get("runner")
+    bridge = getattr(runner, "_execution_bridge", None)
+    exchange = getattr(getattr(bridge, "_orders", None), "_exchange", None)
+    if exchange is None:
+        raise HTTPException(status_code=409, detail="paper/testnet/live execution is not running")
+    return exchange
+
+
+def _persist_position_state(exchange, repo, symbol: str) -> None:
+    position = exchange.get_position(symbol)
+    if position is None:
+        repo.db.execute("DELETE FROM positions WHERE symbol = ?", (symbol,))
+        exchange.cancel_all_orders(symbol)
+    else:
+        repo.save_position(position)
+
+
+@router.post("/positions/{symbol}/close")
+def admin_close_position(
+    symbol: str,
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    ctx.require_admin()
+    from app.database.repository import get_default_repository
+    from app.exchange.models import OrderRequest, OrderSide, OrderType
+    exchange = _position_exchange()
+    position = exchange.get_position(symbol.upper())
+    if position is None:
+        raise HTTPException(status_code=404, detail="position not found")
+    close_side = OrderSide.SELL if position.side == OrderSide.BUY else OrderSide.BUY
+    ticker = exchange.get_ticker(position.symbol)
+    result = exchange.place_order(OrderRequest(position.symbol, close_side, OrderType.MARKET, position.quantity, ticker.price))
+    repo = get_default_repository()
+    repo.save_order(result)
+    _persist_position_state(exchange, repo, position.symbol)
+    return {"status": "closed", "symbol": position.symbol, "quantity": str(result.executed_quantity), "order_id": result.order_id}
+
+
+@router.post("/positions/close-all")
+def admin_close_all_positions(
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    ctx.require_admin()
+    exchange = _position_exchange()
+    repo = __import__("app.database.repository", fromlist=["get_default_repository"]).get_default_repository()
+    results = []
+    symbols = [row[0] for row in repo.db.execute("SELECT symbol FROM positions").fetchall()]
+    for symbol in symbols:
+        position = exchange.get_position(symbol)
+        if position is None:
+            continue
+        from app.exchange.models import OrderRequest, OrderSide, OrderType
+        close_side = OrderSide.SELL if position.side == OrderSide.BUY else OrderSide.BUY
+        ticker = exchange.get_ticker(symbol)
+        result = exchange.place_order(OrderRequest(symbol, close_side, OrderType.MARKET, position.quantity, ticker.price))
+        repo.save_order(result)
+        _persist_position_state(exchange, repo, symbol)
+        results.append({"symbol": symbol, "quantity": str(result.executed_quantity), "order_id": result.order_id})
+    return {"status": "closed", "count": len(results), "positions": results}
+
+
+@router.post("/positions/{symbol}/partial-close")
+def admin_partial_close(
+    symbol: str,
+    payload: dict,
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    ctx.require_admin()
+    from app.database.repository import get_default_repository
+    from app.exchange.models import OrderRequest, OrderSide, OrderType
+    exchange = _position_exchange()
+    position = exchange.get_position(symbol.upper())
+    if position is None:
+        raise HTTPException(status_code=404, detail="position not found")
+    quantity = float(payload.get("quantity", 0) or 0)
+    if payload.get("percent") is not None:
+        quantity = float(position.quantity) * float(payload["percent"]) / 100
+    quantity_decimal = Decimal(str(quantity))
+    if quantity_decimal <= 0 or quantity_decimal > position.quantity:
+        raise HTTPException(status_code=400, detail="quantity must be greater than zero and no more than the position size")
+    close_side = OrderSide.SELL if position.side == OrderSide.BUY else OrderSide.BUY
+    ticker = exchange.get_ticker(position.symbol)
+    result = exchange.place_order(OrderRequest(position.symbol, close_side, OrderType.MARKET, quantity_decimal, ticker.price))
+    repo = get_default_repository()
+    repo.save_order(result)
+    _persist_position_state(exchange, repo, position.symbol)
+    return {"status": "partial_closed", "symbol": position.symbol, "quantity": str(result.executed_quantity), "order_id": result.order_id}
+
+
+@router.post("/positions/{symbol}/brackets")
+def admin_update_brackets(
+    symbol: str,
+    payload: dict,
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    ctx.require_admin()
+    from app.database.repository import get_default_repository
+    from app.exchange.models import OrderRequest, OrderSide, OrderType
+    exchange = _position_exchange()
+    position = exchange.get_position(symbol.upper())
+    if position is None:
+        raise HTTPException(status_code=404, detail="position not found")
+    repo = get_default_repository()
+    exchange.cancel_all_orders(position.symbol)
+    close_side = OrderSide.SELL if position.side == OrderSide.BUY else OrderSide.BUY
+    orders = []
+    allocated = Decimal("0")
+    for level in payload.get("take_profits", []):
+        if not level.get("enabled", True):
+            continue
+        quantity = Decimal(str(level.get("quantity", 0) or (float(position.quantity) * float(level.get("percent", 0)) / 100)))
+        if quantity <= 0:
+            continue
+        if allocated + quantity > position.quantity:
+            raise HTTPException(status_code=400, detail="TP allocations cannot exceed the remaining position size")
+        price = level.get("price")
+        if price is None and level.get("percent") is not None:
+            pct = Decimal(str(level["percent"])) / 100
+            price = position.entry_price * (1 + pct if position.side == OrderSide.BUY else 1 - pct)
+        orders.append(exchange.place_order(OrderRequest(position.symbol, close_side, OrderType.TAKE_PROFIT_MARKET, min(quantity, position.quantity), stop_price=Decimal(str(price)))))
+        allocated += quantity
+    sl = payload.get("stop_loss")
+    if sl is not None:
+        sl_price = Decimal(str(sl.get("price", 0)))
+        if sl_price > 0:
+            orders.append(exchange.place_order(OrderRequest(position.symbol, close_side, OrderType.STOP_MARKET, position.quantity, stop_price=sl_price)))
+    for order in orders:
+        repo.save_order(order)
+    return {"status": "brackets_updated", "symbol": position.symbol, "orders": [{"order_id": o.order_id, "status": o.status, "quantity": str(o.executed_quantity)} for o in orders]}
 
 
 # ===========================================================================

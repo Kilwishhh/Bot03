@@ -113,7 +113,7 @@ class PaperTradingAdapter(ExchangeAdapter):
         # They need no fill price — resolve their stop side and return immediately.
         if request.order_type.value in {"STOP_MARKET", "TAKE_PROFIT_MARKET"}:
             result = OrderResult(
-                order_id, request.symbol, "NEW", Decimal("0"), None,
+                order_id, request.symbol, "NEW", request.quantity, None,
                 {"stopPrice": str(request.stop_price), "side": request.side.value,
                  "type": request.order_type.value},
             )
@@ -152,6 +152,7 @@ class PaperTradingAdapter(ExchangeAdapter):
                 self._positions[request.symbol] = Position(
                     current.symbol, current.side, current.quantity - request.quantity,
                     current.entry_price, fill_price, current.leverage,
+                    strategy_id=current.strategy_id, opened_at=current.opened_at,
                 )
         else:
             self._positions[request.symbol] = Position(
@@ -203,7 +204,7 @@ class PaperTradingAdapter(ExchangeAdapter):
                 continue
 
             position = self._positions.get(symbol)
-            quantity = position.quantity if position else Decimal("0")
+            quantity = min(order.executed_quantity, position.quantity) if position else Decimal("0")
             if position:
                 pnl = (price - position.entry_price) * quantity * Decimal(position.leverage)
                 if position.side.value == "SELL":
@@ -213,12 +214,30 @@ class PaperTradingAdapter(ExchangeAdapter):
                     self._balance.wallet_balance + pnl,
                     self._balance.available_balance + pnl,
                 )
-                self._positions.pop(symbol)
+                if quantity >= position.quantity:
+                    self._positions.pop(symbol)
+                else:
+                    remaining = position.quantity - quantity
+                    self._positions[symbol] = Position(
+                        symbol=position.symbol, side=position.side, quantity=remaining,
+                        entry_price=position.entry_price, mark_price=price,
+                        leverage=position.leverage, unrealized_pnl=Decimal("0"),
+                        strategy_id=position.strategy_id, opened_at=position.opened_at,
+                    )
             self._orders[order.order_id] = OrderResult(order.order_id, symbol, "FILLED", quantity, price, current.raw)
-            # Cancel sibling conditional orders
+            # Remove all brackets after a full close; otherwise resize them.
+            remaining = self._positions.get(symbol)
             for sib in list(self._orders.values()):
-                if sib.symbol == symbol and sib.order_id != order.order_id and sib.status == "NEW":
+                if sib.symbol != symbol or sib.order_id == order.order_id or sib.status != "NEW":
+                    continue
+                if remaining is None:
                     self.cancel_order(symbol, sib.order_id)
+                else:
+                    self._orders[sib.order_id] = OrderResult(
+                        sib.order_id, sib.symbol, sib.status,
+                        min(sib.executed_quantity, remaining.quantity),
+                        sib.average_price, sib.raw,
+                    )
 
     def get_open_orders(self, symbol: str | None = None) -> list[OrderResult]:
         return [o for o in self._orders.values()

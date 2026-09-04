@@ -51,7 +51,7 @@ class PositionWatcher:
         on_position_updated=None,
     ) -> None:
         self._adapter = paper_adapter
-        self._interval = max(0.5, float(poll_interval))
+        self._interval = max(0.05, float(poll_interval))
         self._on_closed = on_position_closed
         self._on_updated = on_position_updated
         self._stop = threading.Event()
