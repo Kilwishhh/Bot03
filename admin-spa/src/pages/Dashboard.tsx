@@ -71,7 +71,7 @@ export default function Dashboard() {
     setResetLoading(true)
     setResetMsg(null)
     try {
-      const r = await api<any>('/admin/reset/paper', { method: 'POST', body: { confirm: true } })
+      const r = await api<any>('/admin/reset/paper', { method: 'POST', query: { confirm: true } })
       setResetMsg({ ok: `Cleared: signals=${r.counts?.signals_deleted ?? 0} trades=${r.counts?.trades_deleted ?? 0}` })
       setResetConfirm(false)
       await load()

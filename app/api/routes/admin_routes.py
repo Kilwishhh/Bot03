@@ -730,7 +730,7 @@ def reset_mode_data(repo, mode: str) -> dict[str, int | str]:
     else:
         raise ValueError(f"unknown mode: {mode}")
 
-    _safe_update("UPDATE control_state SET state='stopped' WHERE id=1")
+    _safe_update("UPDATE control_state SET desired_state='stopped' WHERE id=1")
     return counts
 
 
