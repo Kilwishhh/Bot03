@@ -12,9 +12,35 @@ class SignalPublisher(ABC):
     def publish(self, signal: Signal) -> None: ...
 
 
-def format_signal(signal: Signal) -> str:
-    reasons = "; ".join(signal.reason) or "no reason provided"
-    return f"{signal.symbol} {signal.side.value} confidence={signal.confidence:.2f}\n{reasons}"
+def format_signal(signal: Signal | dict) -> str:
+    """Build the canonical message used by publishers and UI previews."""
+    def value(name: str, default=None):
+        if isinstance(signal, dict):
+            return signal.get(name, default)
+        return getattr(signal, name, default)
+
+    side = value("side", "HOLD")
+    side = side.value if hasattr(side, "value") else str(side)
+    symbol = value("symbol", "")
+    entry = value("entry_price", value("entry"))
+    tp = value("tp1", value("take_profit"))
+    sl = value("stop_loss")
+    hits = value("confidence_hits")
+    total = value("confidence_total")
+    confidence = f"{hits}/{total}" if hits is not None and total else f"{float(value('confidence', 0)):.0%}"
+    strategy = value("strategy_name", value("strategy", "unknown"))
+    timeframe = value("timeframe", "—")
+    mode = str(value("mode", "paper")).upper()
+    return (
+        f"{symbol} {side}\n"
+        f"Entry: {entry if entry is not None else 'TBD'}\n"
+        f"TP: {tp if tp is not None else '—'}\n"
+        f"SL: {sl if sl is not None else '—'}\n"
+        f"Confidence: {confidence}\n"
+        f"Strategy: {strategy}\n"
+        f"Timeframe: {timeframe}\n"
+        f"Mode: {mode}"
+    )
 
 
 class TelegramSignalPublisher(SignalPublisher):

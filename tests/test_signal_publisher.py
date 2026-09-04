@@ -8,7 +8,10 @@ from app.signals import Signal, SignalSide
 
 def test_signal_format_is_safe_for_public_posting():
     signal = Signal("BTCUSDT", SignalSide.BUY, 0.8, datetime.now(UTC), ["EMA bullish"])
-    assert format_signal(signal) == "BTCUSDT BUY confidence=0.80\nEMA bullish"
+    message = format_signal(signal)
+    assert message.startswith("BTCUSDT BUY\n")
+    assert "Confidence: 80%" in message
+    assert "Mode: PAPER" in message
 
 
 def test_square_publisher_is_disabled_without_supported_api():

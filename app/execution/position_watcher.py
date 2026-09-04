@@ -106,7 +106,7 @@ class PositionWatcher:
                     pnl = self._compute_pnl(symbol, position, price)
                     if self._on_closed is not None:
                         try:
-                            self._on_closed(position, pnl)
+                            self._on_closed(position, pnl, price)
                         except Exception as exc:
                             logger.debug("on_position_closed callback error: %s", exc)
                     logger.info(

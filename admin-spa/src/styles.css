@@ -80,6 +80,11 @@ input, select {
 .toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
 .toolbar input { flex: 1; max-width: 300px; }
 .empty { padding: 32px; text-align: center; color: var(--text-dim); }
+.drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; justify-content: flex-end; z-index: 20; }
+.drawer { width: min(520px, 90vw); height: 100%; overflow-y: auto; background: var(--bg-elev); padding: 24px; box-shadow: -8px 0 24px rgba(0,0,0,.3); }
+.drawer-close { float: right; }
+.drawer h3 { margin: 20px 0 8px; }
+.drawer pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); padding: 12px; border-radius: 6px; }
 .control-status { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
 .control-status .state { font-size: 18px; font-weight: 600; }
 .row { display: flex; gap: 16px; flex-wrap: wrap; }

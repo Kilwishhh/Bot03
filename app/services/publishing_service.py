@@ -208,18 +208,11 @@ class PublishingService:
             return f"ERMIS Signal Update — {datetime.now(UTC).strftime('%H:%M UTC')}"
         try:
             from app.services.signal_service import SignalService
+            from app.notifications.signal_publisher import format_signal
             sig = SignalService(self._db_path).get(signal_id, ctx)
-            side = sig.side.value if hasattr(sig.side, "value") else str(sig.side)
-            return (f"📊 ERMIS Signal\n"
-                    f"Symbol: {sig.symbol}\n"
-                    f"Signal: {side}\n"
-                    f"Confidence: {sig.confidence:.0%}\n"
-                    f"Entry: {sig.entry_price or 'TBD'}\n"
-                    f"TP1: {sig.tp1 or '-'} | TP2: {sig.tp2 or '-'}\n"
-                    f"SL: {sig.stop_loss or '-'}\n"
-                    f"Mode: {sig.mode.upper()}")
-        except Exception:
-            return f"ERMIS Signal — {datetime.now(UTC).strftime('%H:%M UTC')}"
+            return format_signal(sig)
+        except Exception as exc:
+            raise RuntimeError(f"could not build message for signal {signal_id}") from exc
 
     def _post_square(self, message: str, config: dict, ctx: AccessContext) -> bool:
         try:

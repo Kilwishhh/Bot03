@@ -415,6 +415,58 @@ def _replace(sig, **kwargs):
 # ---------------------------------------------------------------------------
 
 class TestPositionWatcher:
+    def test_watcher_callback_preserves_actual_exit_price_and_pnl(self, monkeypatch):
+        from app.execution.position_watcher import PositionWatcher
+        from app.exchange.models import Position, OrderSide
+        from app.exchange.paper import PaperTradingAdapter
+        from decimal import Decimal as D
+
+        paper = PaperTradingAdapter(starting_balance=D("10000"), leverage=2)
+        paper._positions["BTCUSDT"] = Position(
+            symbol="BTCUSDT", side=OrderSide.BUY, quantity=D("0.01"),
+            entry_price=D("100"), mark_price=D("100"), leverage=2,
+            unrealized_pnl=D("0"),
+        )
+        callbacks = []
+        monkeypatch.setattr(PositionWatcher, "_fetch_ticker", lambda self, symbol: D("101"))
+        from app.exchange.models import OrderRequest, OrderType
+        paper.place_order(OrderRequest(
+            symbol="BTCUSDT", side=OrderSide.SELL,
+            order_type=OrderType.TAKE_PROFIT_MARKET, quantity=D("0.01"),
+            price=D("100.5"), stop_price=D("100.5"),
+        ))
+        watcher = PositionWatcher(paper, poll_interval=0.05,
+                                  on_position_closed=lambda position, pnl, exit_price:
+                                  callbacks.append((position, pnl, exit_price)))
+        watcher.start()
+        time.sleep(0.15)
+        watcher.stop()
+
+        assert len(callbacks) == 1
+        position, pnl, exit_price = callbacks[0]
+        assert exit_price == D("101")
+        assert pnl == D("0.02")
+
+    def test_pnl_direction_and_equal_price(self):
+        from app.execution.position_watcher import PositionWatcher
+        from app.exchange.models import Position, OrderSide
+        from decimal import Decimal as D
+
+        watcher = PositionWatcher.__new__(PositionWatcher)
+        for side, exit_price, expected in (
+            (OrderSide.BUY, D("110"), D("20")),
+            (OrderSide.BUY, D("90"), D("-20")),
+            (OrderSide.SELL, D("90"), D("20")),
+            (OrderSide.SELL, D("110"), D("-20")),
+            (OrderSide.BUY, D("100"), D("0")),
+        ):
+            position = Position(
+                symbol="BTCUSDT", side=side, quantity=D("1"),
+                entry_price=D("100"), mark_price=D("100"), leverage=2,
+                unrealized_pnl=D("0"),
+            )
+            assert watcher._compute_pnl("BTCUSDT", position, exit_price) == expected
+
     def test_watcher_closes_position_on_tp_trigger(self, bridge_db, monkeypatch):
         """When ticker price crosses TP, watcher calls update_market_price."""
         from app.execution.position_watcher import PositionWatcher

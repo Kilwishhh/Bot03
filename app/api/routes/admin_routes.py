@@ -429,20 +429,20 @@ def admin_control_action(
             # The watcher polls Binance public ticker and calls update_market_price()
             # on the paper adapter, which triggers the adapter's conditional order engine.
             from app.execution.position_watcher import PositionWatcher
-            def _record_closed_trade(position, pnl):
-                now = datetime.now(UTC).isoformat()
+            def _record_closed_trade(position, pnl, exit_price):
+                exit_time = datetime.now(UTC).isoformat()
                 repository.save_trade({
                     "trade_id": str(uuid.uuid4()),
                     "symbol": position.symbol,
                     "side": position.side.value,
                     "quantity": str(position.quantity),
                     "entry_price": str(position.entry_price),
-                    "exit_price": str(position.mark_price or position.entry_price),
+                    "exit_price": str(exit_price),
                     "realized_pnl": str(pnl),
                     "fees": "0",
                     "strategy": "multi_symbol_scanner",
-                    "entry_time": now,
-                    "exit_time": now,
+                    "entry_time": exit_time,
+                    "exit_time": exit_time,
                 })
 
             _watcher = PositionWatcher(
@@ -1301,6 +1301,8 @@ def admin_list_signals(
     strategy_id: str | None = None,
     symbol: str | None = None,
     mode: str | None = None,
+    status: str | None = None,
+    trading_status: str | None = None,
     ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
 ):
     ctx.require_admin()
@@ -1318,13 +1320,18 @@ def admin_list_signals(
         "symbol", "side", "timeframe", "entry", "take_profit", "stop_loss",
         "confidence", "confidence_hits", "confidence_total",
         "mode", "reasons", "reason", "indicators",
-        "candle_close_time", "status", "trading_status",
+        "candle_close_time", "status", "signal_status", "trading_status",
+        "telegram_status", "square_status", "user_id",
+        "tp1", "tp2", "entry_price", "candle_close_epoch",
         "timestamp", "created_at", "updated_at",
     )]
     if not select_cols:
         return []
     q = f"SELECT {', '.join(select_cols)} FROM signals WHERE 1=1"
     params: list = []
+    if "trading_status" in cols and not trading_status:
+        q += " AND COALESCE(trading_status, '') != ?"
+        params.append("rejected")
     if strategy_id and "strategy_id" in cols:
         q += " AND strategy_id = ?"
         params.append(strategy_id)
@@ -1338,6 +1345,12 @@ def admin_list_signals(
     if mode and "mode" in cols:
         q += " AND mode = ?"
         params.append(mode)
+    if status and "signal_status" in cols:
+        q += " AND signal_status = ?"
+        params.append(status)
+    if trading_status and "trading_status" in cols:
+        q += " AND trading_status = ?"
+        params.append(trading_status)
     if "created_at" in cols:
         q += " ORDER BY created_at DESC"
     elif "timestamp" in cols:
@@ -1355,6 +1368,42 @@ def admin_list_signals(
             d[c] = v
         out.append(d)
     return out
+
+
+@router.get("/signals/{signal_id}")
+def admin_get_signal(
+    signal_id: str,
+    ctx: AccessContext = Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+):
+    ctx.require_admin()
+    from app.database.repository import get_default_repository
+    from app.notifications.signal_publisher import format_signal
+    repo = get_default_repository()
+    cols = [r[1] for r in repo.db.execute("PRAGMA table_info(signals)").fetchall()]
+    id_col = "signal_id" if "signal_id" in cols else "id"
+    row = repo.db.execute(
+        f"SELECT * FROM signals WHERE {id_col} = ? OR id = ? LIMIT 1",
+        (signal_id, signal_id),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="signal not found")
+    result = {c: v for c, v in zip(cols, row)}
+    result["telegram_preview"] = format_signal(result)
+    entry = result.get("entry_price") or result.get("entry")
+    if entry is not None:
+        trade = repo.db.execute(
+            "SELECT trade_id, side, quantity, entry_price, exit_price, realized_pnl, fees, entry_time, exit_time "
+            "FROM trades WHERE symbol = ? AND CAST(entry_price AS REAL) = CAST(? AS REAL) "
+            "ORDER BY entry_time DESC LIMIT 1",
+            (result.get("symbol"), entry),
+        ).fetchone()
+        if trade:
+            result["trade"] = dict(zip(
+                ("trade_id", "side", "quantity", "entry_price", "exit_price",
+                 "realized_pnl", "fees", "entry_time", "exit_time"),
+                trade,
+            ))
+    return result
 
 
 # ===========================================================================
