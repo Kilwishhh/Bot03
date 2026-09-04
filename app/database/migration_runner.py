@@ -63,6 +63,22 @@ def apply_migrations(conn: sqlite3.Connection, dry_run: bool = False) -> list[st
             applied.append(name)
             continue
 
+        if name == "011_positions_strategy_id" and not dry_run:
+            # Older databases may already contain this column while their
+            # migration ledger does not, so execute each statement safely.
+            with conn:
+                _exec_one(conn, "ALTER TABLE positions ADD COLUMN strategy_id TEXT")
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_positions_strategy "
+                    "ON positions(strategy_id)"
+                )
+                conn.execute(
+                    "INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)",
+                    (name, _now_iso()),
+                )
+            applied.append(name)
+            continue
+
         if name == "014_extend_signals_full" and not dry_run:
             # Idempotent: only add columns that don't already exist.
             with conn:
