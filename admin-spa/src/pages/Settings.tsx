@@ -12,12 +12,12 @@ export default function Settings() {
   const load = async () => {
     try {
       const [sys, ctrl] = await Promise.all([
-        api('/health/system'),
+        api('/health'),
         api('/control/status'),
       ])
-      setStatus(sys)
-      setMode(ctrl.state || 'unknown')
-      setLive(ctrl.live_trading_enabled || false)
+      setStatus({ ...sys, trading_mode: sys.mode })
+      setMode(ctrl.desired_state || 'unknown')
+      setLive(Boolean(sys.live_trading_enabled))
     } catch { setStatus(null) } finally { setLoading(false) }
   }
 
@@ -28,7 +28,7 @@ export default function Settings() {
     setRestarting(true)
     setMsg({})
     try {
-      await api('/admin/restart', { method: 'POST' })
+      await api('/admin/server-restart', { method: 'POST' })
       setMsg({ ok: 'Server restarting… refresh in ~10s.' })
       // poll until it comes back
       for (let i = 0; i < 15; i++) {

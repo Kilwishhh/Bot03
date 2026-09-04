@@ -18,7 +18,7 @@ _install_log_buffer()
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import require_admin_token
@@ -180,11 +180,9 @@ def service_worker() -> FileResponse:
 
 
 @app.get("/", include_in_schema=False)
-def landing() -> FileResponse:
-    return FileResponse(
-        Path(__file__).resolve().parent.parent.parent
-        / "dashboard" / "dist" / "index.html"
-    )
+def landing() -> RedirectResponse:
+    """Open the current React admin application at the site root."""
+    return RedirectResponse(url="/admin", status_code=307)
 
 
 @app.get("/health")
@@ -394,8 +392,10 @@ def admin_status(_: None = Depends(require_admin_token)) -> dict[str, object]:
     }
 
 
-@app.post("/admin/restart")
-def admin_restart(_: None = Depends(require_admin_token)) -> dict[str, object]:
+@app.post("/admin/server-restart")
+def admin_server_restart(
+    ctx=Depends(__import__("app.api.dependencies", fromlist=["get_access_context"]).get_access_context),
+) -> dict[str, object]:
     """Restart the FastAPI server. The current process exits; a fresh one
     takes its place on the same port via the dev launcher.
 
@@ -407,16 +407,13 @@ def admin_restart(_: None = Depends(require_admin_token)) -> dict[str, object]:
     import sys
     import threading
 
+    ctx.require_admin()
+
     def _spawn_replacement():
         # small delay so the response can flush before we die
         import time
         time.sleep(1)
         try:
-            # If the dev_server launcher is in use, it picks up our exit code.
-            # Otherwise fall back to spawning a new uvicorn directly.
-            os.environ["MK_DEV_LAUNCHER"] = "1"
-            if os.environ.get("MK_DEV_LAUNCHER") == "1":
-                os._exit(0)  # dev launcher will respawn
             import subprocess
             subprocess.Popen(
                 [sys.executable, "-m", "uvicorn", "app.api.server:app",
