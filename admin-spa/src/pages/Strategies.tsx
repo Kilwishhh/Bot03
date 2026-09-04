@@ -78,7 +78,15 @@ const EMPTY: StrategyForm = {
   notes: '',
 }
 
-const INDICATOR_TYPES = ['RSI', 'EMA', 'SMA', 'MACD', 'BBANDS', 'ATR', 'ADX', 'STOCH']
+const INDICATOR_TYPES = ['RSI', 'EMA', 'SMA', 'MACD', 'BOLLINGER', 'VOLUME']
+const INDICATOR_DEFAULTS: Record<string, Record<string, number>> = {
+  RSI: { period: 14 },
+  EMA: { period: 21 },
+  SMA: { period: 50 },
+  MACD: { fast_period: 12, slow_period: 26, signal_period: 9 },
+  BOLLINGER: { period: 20, std_multiplier: 2 },
+  VOLUME: {},
+}
 
 // ── Timeframe helpers ────────────────────────────────────────────────────────
 type TfUnit = 'minutes' | 'hours' | 'days'
@@ -657,6 +665,14 @@ function StrategyBuilder(props: {
     setField('indicators_config', [...f.indicators_config, { name: 'RSI', params: { period: 14 } }])
   const removeIndicator = (idx: number) =>
     setField('indicators_config', f.indicators_config.filter((_, i) => i !== idx))
+  const indicatorFields = f.indicators_config.flatMap(ind => {
+    const period = ind.params.period
+    if (ind.name === 'MACD') return ['MACD_LINE', 'MACD_SIGNAL', 'MACD_HIST']
+    if (ind.name === 'BOLLINGER') return ['BB_UPPER', 'BB_MIDDLE', 'BB_LOWER']
+    if (ind.name === 'VOLUME') return ['VOLUME']
+    return period ? [`${ind.name}_${period}`] : [ind.name]
+  })
+  const availableFields = ['PRICE', ...indicatorFields]
 
   const setGroup = (gi: number, patch: any) => {
     const groups = [...f.conditions_config.groups]
@@ -689,6 +705,14 @@ function StrategyBuilder(props: {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 880, maxHeight: '90vh', overflow: 'auto' }}>
         <h3>{title}</h3>
+        <p className="muted" style={{marginTop:-6}}>
+          Build your strategy in four steps: choose the market, add indicators, define when to enter, then protect the trade.
+        </p>
+        <div style={{display:'flex', gap:6, flexWrap:'wrap', marginBottom:14}}>
+          {['1 Basics', '2 Indicators', '3 Entry rules', '4 Exits & risk'].map(step =>
+            <span key={step} className="badge blue">{step}</span>
+          )}
+        </div>
 
         {/* Basic info */}
         <fieldset>
@@ -807,22 +831,24 @@ function StrategyBuilder(props: {
 
         {/* Indicators */}
         <fieldset>
-          <legend>Indicators</legend>
+          <legend>2. Indicators — what should the strategy measure?</legend>
+          <p className="muted" style={{fontSize:12}}>Add as many indicators as you need. Their values become available in the Entry rules section.</p>
           {f.indicators_config.map((ind, idx) => (
-            <div key={idx} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
-              <select value={ind.name} onChange={e => setIndicator(idx, { name: e.target.value })}>
+            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: 8, marginBottom: 8, alignItems: 'center', border:'1px solid #333', borderRadius:6, padding:8 }}>
+              <select value={ind.name} onChange={e => setIndicator(idx, { name: e.target.value, params: INDICATOR_DEFAULTS[e.target.value] })}>
                 {INDICATOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
-              {Object.entries(ind.params).map(([pk, pv]) => (
-                <span key={pk} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <span className="muted" style={{ fontSize: 11 }}>{pk}=</span>
+              <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+                {Object.entries(ind.params).map(([pk, pv]) => (
+                <label key={pk} style={{display:'flex', alignItems:'center', gap:4, fontSize:12}}>
+                  <span className="muted">{pk}</span>
                   <input
-                    type="number" style={{ width: 60 }} value={pv}
+                    type="number" min={1} style={{ width: 68 }} value={pv}
                     onChange={e => setIndicator(idx, { params: { ...ind.params, [pk]: parseFloat(e.target.value) || 0 } })}
                   />
-                </span>
+                </label>
               ))}
-              <button onClick={() => setIndicator(idx, { params: { ...ind.params, period: 14 } })}>+ param</button>
+              </div>
               <button className="danger" onClick={() => removeIndicator(idx)}>×</button>
             </div>
           ))}
@@ -831,7 +857,8 @@ function StrategyBuilder(props: {
 
         {/* Conditions */}
         <fieldset>
-          <legend>Entry Conditions</legend>
+          <legend>3. Entry rules — when should it open a trade?</legend>
+          <p className="muted" style={{fontSize:12}}>A condition compares a live indicator with a number or another indicator. Use groups to create advanced AND/OR logic.</p>
           <div style={{ marginBottom: 8 }}>
             <label>Top-level logic: </label>
             <select value={f.conditions_config.logic} onChange={e => setField('conditions_config', { ...f.conditions_config, logic: e.target.value as any })}>
@@ -852,15 +879,14 @@ function StrategyBuilder(props: {
               </div>
               {g.conditions.map((c, ci) => (
                 <div key={ci} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
-                  <input
-                    placeholder="FIELD (e.g. RSI_14)" value={c.field}
-                    onChange={e => setCondition(gi, ci, { field: e.target.value })} style={{ width: 110 }}
-                  />
+                  <select value={c.field} onChange={e => setCondition(gi, ci, { field: e.target.value })}>
+                    {availableFields.map(field => <option key={field} value={field}>{field}</option>)}
+                  </select>
                   <select value={c.op} onChange={e => setCondition(gi, ci, { op: e.target.value })}>
                     {OPS.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                   <input
-                    placeholder="value (or ref:NAME)" value={c.value ?? ''}
+                    placeholder="number or ref:EMA_21" value={c.ref ? `ref:${c.ref}` : (c.value ?? '')}
                     onChange={e => {
                       const v = e.target.value
                       if (v.startsWith('ref:')) setCondition(gi, ci, { ref: v.slice(4), value: undefined })
@@ -878,7 +904,7 @@ function StrategyBuilder(props: {
 
         {/* Exit / TP / SL */}
         <fieldset>
-          <legend>Exit — Take Profit / Stop Loss</legend>
+          <legend>4. Exits — take profit, stop loss & trailing protection</legend>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
             <div>
               <label>TP %</label>
@@ -907,7 +933,7 @@ function StrategyBuilder(props: {
 
         {/* Risk */}
         <fieldset>
-          <legend>Risk</legend>
+          <legend>Risk guardrails — keep the account protected</legend>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div>
               <label>Max per trade (fraction of balance)</label>
