@@ -696,6 +696,8 @@ function StrategyBuilder(props: {
   const enabledIndicators = f.indicators_config.filter(ind => ind.enabled !== false)
   const indicatorTotal = enabledIndicators.length
   const minimumHits = Math.min(Math.max(1, f.confidence_config.minimum_hits || 1), Math.max(1, indicatorTotal))
+  const previewLong = enabledIndicators.filter((_, index) => index < minimumHits).length
+  const previewShort = enabledIndicators.filter((ind, index) => ind.short_enabled !== false && index >= minimumHits && index < minimumHits + 1).length
   useEffect(() => {
     if (indicatorTotal > 0 && f.confidence_config.minimum_hits > indicatorTotal) {
       setField('confidence_config', { minimum_hits: indicatorTotal })
@@ -871,7 +873,9 @@ function StrategyBuilder(props: {
               <button className="danger" onClick={() => removeIndicator(idx)} style={{marginLeft:'auto'}}>Remove</button>
               </div>
               <p className="muted" style={{fontSize:12, margin:'6px 0'}}>{INDICATOR_HELP[ind.name]}</p>
-              <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'center'}}>
+              <details style={{marginTop:8}}>
+                <summary style={{cursor:'pointer', color:'var(--accent)'}}>Settings</summary>
+              <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'center', marginTop:8}}>
                 {Object.entries(ind.params).map(([pk, pv]) => (
                 <label key={pk} style={{display:'flex', alignItems:'center', gap:4, fontSize:12}}>
                   <span className="muted">{pk}</span>
@@ -882,6 +886,7 @@ function StrategyBuilder(props: {
                 </label>
               ))}
               </div>
+              </details>
               <div style={{display:'flex', gap:12, marginTop:8, fontSize:12}}>
                 <label><input type="checkbox" checked={ind.long_enabled !== false} onChange={e => setIndicator(idx, { long_enabled: e.target.checked })} /> LONG ✓</label>
                 <label><input type="checkbox" checked={ind.short_enabled !== false} onChange={e => setIndicator(idx, { short_enabled: e.target.checked })} /> SHORT ✓</label>
@@ -976,13 +981,16 @@ function StrategyBuilder(props: {
           <p className="muted" style={{fontSize:12}}>
             This preview explains the voting model. Live signals use the same enabled indicators and minimum.
           </p>
-          {enabledIndicators.map(ind => <div key={ind.name} style={{display:'flex', justifyContent:'space-between', fontSize:12, padding:'3px 0'}}>
-            <span>{ind.name.replace('_', ' ')}</span><span className="muted">LONG / SHORT / NEUTRAL</span>
+          {enabledIndicators.map((ind, index) => <div key={`${ind.name}-${index}`} style={{display:'flex', justifyContent:'space-between', fontSize:12, padding:'3px 0'}}>
+            <span>{ind.name.replace('_', ' ')}</span><span className={index < minimumHits ? 'ok' : 'muted'}>{index < minimumHits ? 'LONG ✓' : index === minimumHits ? 'SHORT' : 'NEUTRAL'}</span>
           </div>)}
           <div style={{display:'flex', gap:18, marginTop:8}}>
-            <strong>LONG: —/{indicatorTotal}</strong><strong>SHORT: —/{indicatorTotal}</strong>
+            <strong>LONG: {previewLong}/{indicatorTotal}</strong><strong>SHORT: {previewShort}/{indicatorTotal}</strong>
           </div>
           <p style={{marginBottom:6}}>Minimum Required: <strong>{minimumHits}/{indicatorTotal}</strong></p>
+          <p className={previewLong >= minimumHits ? 'ok' : 'muted'} style={{marginBottom:8}}>
+            {previewLong >= minimumHits ? '✓ LONG SIGNAL VALID (example)' : 'No direction reaches the minimum yet'}
+          </p>
           <button type="button" onClick={() => alert('The bot checks each enabled indicator when a candle closes. Each returns LONG, SHORT, or NEUTRAL. It counts agreement for the selected direction. A signal is created only when that direction reaches the minimum required votes.')}>How does this work?</button>
         </fieldset>
 
