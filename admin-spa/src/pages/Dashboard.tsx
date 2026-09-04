@@ -1,12 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api } from '../api'
+import { useNavigate } from 'react-router-dom'
 
-type BotState = 'stopped' | 'running' | 'paused'
+type BotState = 'stopped' | 'running' | 'paused' | 'stopping'
 
 function stateLabel(s: BotState) { return s.toUpperCase() }
 function stateClass(s: BotState) {
   if (s === 'running') return 'green'
   if (s === 'paused') return 'yellow'
+  if (s === 'stopping') return 'yellow'
   return 'gray'
 }
 
@@ -19,6 +21,9 @@ export default function Dashboard() {
   const [resetConfirm, setResetConfirm] = useState(false)
   const [resetMode, setResetMode] = useState<'paper' | 'testnet' | 'live' | 'all'>('paper')
   const [resetMsg, setResetMsg] = useState<{ok?: string; err?: string} | null>(null)
+  const [loadError, setLoadError] = useState('')
+  const [lastSync, setLastSync] = useState<Date | null>(null)
+  const navigate = useNavigate()
 
   // Derive effective state from backend
   const state: BotState = (() => {
@@ -34,7 +39,11 @@ export default function Dashboard() {
       ])
       setCtrl(c)
       setStats(s)
-    } catch {}
+      setLoadError('')
+      setLastSync(new Date())
+    } catch (e: any) {
+      setLoadError(e.detail || e.message || 'Dashboard data unavailable')
+    }
   }, [])
 
   // Initial load
@@ -46,7 +55,7 @@ export default function Dashboard() {
       if (!document.hidden) load()
     }
     document.addEventListener('visibilitychange', onVisibility)
-    const id = setInterval(load, 15000)
+    const id = setInterval(load, 5000)
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisibility) }
   }, [load])
 
@@ -56,7 +65,7 @@ export default function Dashboard() {
       await api(`/admin/control/${action}`, { method: 'POST' })
       await load()
     } catch (e: any) {
-      alert(`Action failed: ${e.detail || e.message || action}`)
+      setLoadError(e.detail || e.message || `${action} failed`)
     } finally {
       setCtrlAction('')
     }
@@ -89,14 +98,21 @@ export default function Dashboard() {
   return (
     <div>
       <h2 className="page-title">Dashboard</h2>
+      {loadError && <div className="error" style={{marginBottom:12}}>{loadError}</div>}
 
       {/* ── Bot state & controls ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+      <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 700, fontSize: 14 }}>STATUS:</span>
         <span className={`badge ${stateClass(state)}`}>{stateLabel(state)}</span>
+        <span className="muted" style={{marginLeft:'auto'}}>
+          {lastSync ? `Synced ${lastSync.toLocaleTimeString()}` : 'Syncing…'}
+        </span>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+      <div className="card" style={{ marginBottom: 20 }}>
+        <h3 style={{marginTop:0}}>Bot Controls</h3>
+        <p className="muted">Start, pause, resume, or stop the active scanner. Dashboard data syncs automatically every 5 seconds.</p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {/* START — only when stopped */}
         <button
           className="success"
@@ -133,14 +149,25 @@ export default function Dashboard() {
           {ctrlAction === 'stop' ? 'Stopping…' : 'STOP'}
         </button>
 
-        {/* REFRESH */}
         <button
           disabled={refreshLoading || ctrlAction !== ''}
           onClick={handleRefresh}
           style={{ background: '#334', color: '#fff', border: '1px solid #445' }}
         >
-          {refreshLoading ? 'Refreshing…' : 'REFRESH'}
+          {refreshLoading ? 'Syncing…' : 'SYNC DATA'}
         </button>
+        </div>
+      </div>
+
+      <div className="card" style={{marginBottom:20}}>
+        <h3 style={{marginTop:0}}>Quick Access</h3>
+        <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+          <button onClick={() => navigate('/strategies')}>Manage Strategies</button>
+          <button onClick={() => navigate('/signals')}>View Signals</button>
+          <button onClick={() => navigate('/positions')}>Open Positions</button>
+          <button onClick={() => navigate('/trades')}>Trade History</button>
+          <button onClick={() => navigate('/logs')}>System Logs</button>
+        </div>
       </div>
 
       {/* ── Reset runtime data ── */}

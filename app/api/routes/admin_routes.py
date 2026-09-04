@@ -295,6 +295,9 @@ def admin_control(
     if not thread_alive:
         effective = "stopped"
         paused = False
+    elif db_state == "stopped" or _controller.get("stop"):
+        effective = "stopping"
+        paused = False
     elif runner is not None and runner.is_paused:
         effective = "paused"
         paused = True
@@ -323,6 +326,7 @@ def admin_control_action(
     repo = get_default_repository()
 
     if action == "start":
+        _controller["stop"] = False
         # Recover from stale 'running' state — the previous worker thread died
         # without updating control_state (e.g. crash, OOM, process killed).
         # Treat any 'running' row with no live thread as stopped.
@@ -495,6 +499,9 @@ def admin_control_action(
 
     if action == "stop":
         _controller["stop"] = True
+        runner = _controller.get("runner")
+        if runner is not None:
+            runner.stop()
         # P0-EXEC: stop the position watcher so the runner thread isn't left alive
         _watcher = _controller.get("position_watcher")
         if _watcher is not None:
@@ -503,9 +510,6 @@ def admin_control_action(
             except Exception:
                 pass
             _controller["position_watcher"] = None
-        runner = _controller.get("runner")
-        if runner is not None:
-            runner.stop()
         try:
             repo.set_control_state("stopped")
         except Exception:
@@ -516,7 +520,9 @@ def admin_control_action(
         deadline = _time.time() + 10
         while _controller.get("thread") is not None and _controller["thread"].is_alive() and _time.time() < deadline:
             _time.sleep(0.2)
-        return {"action": "stop", "state": "stopped"}
+        _controller["paused"] = False
+        stopped = _controller.get("thread") is None or not _controller["thread"].is_alive()
+        return {"action": "stop", "state": "stopped" if stopped else "stopping"}
 
     if action == "pause":
         runner = _controller.get("runner")
