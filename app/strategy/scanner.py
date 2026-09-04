@@ -341,16 +341,22 @@ def _compute_confidence(
     total_conditions: int,
     confidence_config: dict,
 ) -> float:
-    """Compute signal confidence based on conditions matched and config."""
-    mode = confidence_config.get("mode", "automatic")
-    if mode == "fixed":
-        return float(confidence_config.get("min_confidence", 0.65))
+    """Return the normalized hits/total quality used by legacy risk checks."""
+    if total_conditions <= 0:
+        return 0.0
+    return round(min(total_conditions, max(0, reasons_matched)) / total_conditions, 4)
 
-    base = float(confidence_config.get("base_confidence", 0.5))
-    if total_conditions == 0:
-        return base
-    ratio = min(1.0, reasons_matched / total_conditions)
-    return round(base + (0.95 - base) * ratio, 4)
+
+def _minimum_hits_for_strategy(confidence_config: dict, total_conditions: int) -> int:
+    """Resolve the integer per-strategy gate, safely bounded by its rule count."""
+    if total_conditions <= 0:
+        return 0
+    configured = confidence_config.get("minimum_hits", 1)
+    try:
+        minimum = int(configured)
+    except (TypeError, ValueError):
+        minimum = 1
+    return min(total_conditions, max(1, minimum))
 
 
 def _determine_side(reasons: list[str], conditions_config: dict) -> str:
@@ -658,7 +664,12 @@ class StrategyScanner:
         hits = sum(1 for c in cond_results if c.passed)
         self._diag.record_conditions(hits, max(1, total_conds))
 
-        if not matched:
+        minimum_hits = _minimum_hits_for_strategy(strat.confidence_config, total_conds)
+        # An explicit N-of-M confidence rule intentionally overrides group
+        # matching, so a strategy can trade at 5/10 even when its group logic
+        # is "all". Legacy strategies without this setting retain group gating.
+        explicit_confidence_gate = "minimum_hits" in strat.confidence_config
+        if (not matched and not explicit_confidence_gate) or hits < minimum_hits:
             # P0-04: aggregate per-cycle; suppress per-symbol DEBUG spam.
             self._cycle_fail_count += 1
             if len(self._cycle_fail_samples) < self._cycle_fail_sample_max:
@@ -666,11 +677,11 @@ class StrategyScanner:
             return None
 
         # P0-02: enforce minimum_hits threshold from paper config
-        if hits < self._minimum_hits:
+        if hits < max(self._minimum_hits, minimum_hits):
             # P0-04: aggregate per-cycle; suppress per-symbol DEBUG spam.
             self._cycle_min_hits_count += 1
             if len(self._cycle_min_hits_samples) < self._cycle_fail_sample_max:
-                self._cycle_min_hits_samples.append((strat.name, symbol, hits, self._minimum_hits))
+                self._cycle_min_hits_samples.append((strat.name, symbol, hits, max(self._minimum_hits, minimum_hits)))
             return None
 
         # Get entry price
@@ -702,7 +713,7 @@ class StrategyScanner:
         side = _determine_side(reasons, strat.conditions_config)
         tp, sl = _compute_tp_sl(entry, side, strat.exit_config)
         confidence = _compute_confidence(
-            len(reasons), total_conds, strat.confidence_config
+            hits, total_conds, strat.confidence_config
         )
 
         signal = ScannerSignal(

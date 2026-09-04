@@ -47,16 +47,12 @@ export default function Signals() {
 
   const fmtPrice = (v: any) => v != null ? parseFloat(v).toFixed(6) : '—'
 
-  // Confidence: display as N/M (hits/total). Fall back to legacy float only when
-  // the new columns are absent (very old rows).
+  // Confidence is intentionally always shown as N/M, never as a percentage.
   const fmtConfidence = (s: any) => {
     const hits = s.confidence_hits
     const total = s.confidence_total
     if (hits != null && total != null && total > 0) {
       return `${hits}/${total}`
-    }
-    if (s.confidence != null) {
-      return `${Math.round(parseFloat(s.confidence) * 100)}%`
     }
     return '—'
   }

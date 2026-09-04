@@ -45,7 +45,7 @@ interface StrategyForm {
     max_leverage: number
     max_exposure: number
   }
-  confidence_config: { mode: 'automatic' | 'fixed'; base_confidence: number }
+  confidence_config: { minimum_hits: number }
   notes: string
 }
 
@@ -74,7 +74,7 @@ const EMPTY: StrategyForm = {
   },
   exit_config: { take_profit_pct: 1.5, stop_loss_pct: 0.8, trailing_stop: false, trailing_pct: 0 },
   risk_config: { max_per_trade: 0.02, max_daily_loss: 0.05, max_open_positions: 3, max_leverage: 10, max_exposure: 0.5 },
-  confidence_config: { mode: 'automatic', base_confidence: 0.5 },
+  confidence_config: { minimum_hits: 1 },
   notes: '',
 }
 
@@ -674,6 +674,7 @@ function StrategyBuilder(props: {
   })
   const availableFields = ['PRICE', ...indicatorFields]
 
+  const conditionTotal = f.conditions_config.groups.reduce((sum, group) => sum + group.conditions.length, 0)
   const setGroup = (gi: number, patch: any) => {
     const groups = [...f.conditions_config.groups]
     groups[gi] = { ...groups[gi], ...patch }
@@ -965,21 +966,25 @@ function StrategyBuilder(props: {
 
         {/* Confidence */}
         <fieldset>
-          <legend>Confidence</legend>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div>
-              <label>Mode</label>
-              <select value={f.confidence_config.mode} onChange={e => setField('confidence_config', { ...f.confidence_config, mode: e.target.value as any })}>
-                <option value="automatic">Automatic (from conditions matched)</option>
-                <option value="fixed">Fixed</option>
-              </select>
-            </div>
-            <div>
-              <label>Base confidence (0-1)</label>
-              <input type="number" step="0.05" min={0} max={1} value={f.confidence_config.base_confidence}
-                onChange={e => setField('confidence_config', { ...f.confidence_config, base_confidence: parseFloat(e.target.value) || 0 })} />
-            </div>
+          <legend>Signal quality — how many rules must agree?</legend>
+          <p className="muted" style={{fontSize:12}}>
+            The scanner evaluates every entry rule and reports quality as hits/total. A trade is enabled only when the minimum is reached.
+          </p>
+          <label>Minimum rules that must pass</label>
+          <div style={{display:'flex', gap:8, alignItems:'center'}}>
+            <input
+              type="number" min={1} max={Math.max(1, conditionTotal)}
+              value={Math.min(Math.max(1, f.confidence_config.minimum_hits || 1), Math.max(1, conditionTotal))}
+              onChange={e => setField('confidence_config', {
+                minimum_hits: Math.min(Math.max(1, parseInt(e.target.value) || 1), Math.max(1, conditionTotal)),
+              })}
+              style={{width:80}}
+            />
+            <strong>of {conditionTotal || 0} rules</strong>
           </div>
+          <p className="muted" style={{fontSize:12, marginBottom:0}}>
+            Example: with 10 rules and minimum 5, only signals scoring at least 5/10 can create a trade.
+          </p>
         </fieldset>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>

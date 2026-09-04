@@ -949,7 +949,7 @@ def admin_create_strategy(
                 json.dumps(payload.get("indicators_config", [])),
                 json.dumps(payload.get("conditions_config", {})),
                 json.dumps(payload.get("filters_config", {})),
-                json.dumps(payload.get("confidence_config", {"mode": "automatic", "base_confidence": 0.5})),
+                json.dumps(payload.get("confidence_config", {"minimum_hits": 1})),
                 payload.get("notes"),
             ),
         )
@@ -1231,9 +1231,7 @@ def admin_import_strategy(
             "max_exposure": float(risk_cfg.get("max_exposure", 0.5)),
         },
         "confidence_config": {
-            "mode": "automatic",
-            "min_confidence": float(confidence_cfg.get("minimum", 0.65)),
-            "base_confidence": 0.5,
+            "minimum_hits": max(1, int(confidence_cfg.get("minimum_hits", confidence_cfg.get("minimum", 1)))),
         },
         "notes": payload.get("notes", ""),
         "lifecycle_state": "paper",  # import always defaults to safe paper

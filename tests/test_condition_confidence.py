@@ -7,6 +7,7 @@ from app.strategy.condition_engine import (
     evaluate_condition_groups,
     evaluate_condition_groups_with_results,
 )
+from app.strategy.scanner import _compute_confidence, _minimum_hits_for_strategy
 
 
 class TestEvaluateConditionGroupsWithResults:
@@ -137,3 +138,14 @@ class TestEvaluateConditionConfidenceLegacyUnchanged:
         assert len(result) == 2  # (matched, reasons)
         matched, reasons = result
         assert matched is True
+
+
+class TestIntegerConfidenceGate:
+    def test_minimum_hits_is_integer_and_bounded(self):
+        assert _minimum_hits_for_strategy({"minimum_hits": 5}, 10) == 5
+        assert _minimum_hits_for_strategy({"minimum_hits": 99}, 10) == 10
+        assert _minimum_hits_for_strategy({"minimum_hits": 0}, 10) == 1
+
+    def test_quality_is_hits_over_total_without_percentage_semantics(self):
+        assert _compute_confidence(5, 10, {"minimum_hits": 5}) == 0.5
+        assert _compute_confidence(7, 7, {"minimum_hits": 5}) == 1.0
